@@ -2,7 +2,7 @@
 /* =========================================================
  *  AIエージェント オフィス
  *  アイソメトリックなオフィスで、ちびキャラのAIエージェントが
- *  タスクを拾ってデスクで作業 → 納品BOXに提出するシミュレーション
+ *  営業部・事務部に分かれてタスクを拾い、デスクで作業 → 提出するシミュレーション
  * ========================================================= */
 
 const $ = (s) => document.querySelector(s);
@@ -31,37 +31,68 @@ function box(x, y, w, d, h, z, c, extra = '') {
   return poly(left, c, extra) + poly(right, shade(c, -0.18), extra) + poly(top, shade(c, 0.18), extra);
 }
 
-/* ---------- データ定義 ---------- */
-const ROLES = {
-  research: { label: 'リサーチャー', task: '調査', icon: '🔍' },
-  writing:  { label: 'ライター',     task: '執筆', icon: '✍️' },
-  code:     { label: 'エンジニア',   task: '開発', icon: '💻' },
-  design:   { label: 'デザイナー',   task: 'デザイン', icon: '🎨' },
+/* ---------- 部署ごとの定義（営業部 / 事務部） ---------- */
+const DEPTS = {
+  sales: {
+    name: '営業部', icon: '💼', boxLabel: '報告BOX', boardTitle: 'SALES BOARD', poster: ['目標達成!', '🔥📈'], mvpTitle: 'TOP SALES',
+    roles: {
+      inside: { label: 'インサイドセールス', task: 'アポ獲得', icon: '📞' },
+      proposal: { label: '提案担当', task: '提案書', icon: '📑' },
+      field: { label: 'フィールドセールス', task: '商談', icon: '🤝' },
+      cs: { label: 'カスタマーサクセス', task: '既存フォロー', icon: '💐' },
+    },
+    ideas: {
+      inside: ['リスト50件にアポ電', 'Web問い合わせに返信', '展示会リードを整理', '休眠顧客に再アプローチ', 'セミナー参加者へ架電'],
+      proposal: ['A社向け提案書を作成', '見積書を作成', '導入事例スライドを更新', '料金比較表を作成', 'RFPへの回答書'],
+      field: ['B社と初回商談', 'C社へクロージング', '新規エリアを訪問', '決裁者プレゼン', 'オンライン商談'],
+      cs: ['既存顧客の定例MTG', '解約防止ヒアリング', 'アップセル提案', '導入後アンケート', '活用セミナー開催'],
+    },
+    workLines: {
+      inside: ['お世話になっております📞', '担当者さまいらっしゃいますか', 'アポ取れた！', '折り返し待ち…', 'リスト消化中'],
+      proposal: ['課題を整理して…', '見出し決まった！', '数字で語ろう📊', '誤字チェック✓', 'いい事例ある！'],
+      field: ['御社の課題は…', '前向きに検討とのこと！', '決裁者に響いた✨', '値引きは…ちょっと', '握手🤝'],
+      cs: ['使いこなせてますか？', '要望メモメモ📝', '満足度アップ↑', 'ご活用ありがとうございます', '次回もよろしくです'],
+    },
+    chats: [['今月あと何件？', 'あと3件で達成！'], ['A社どうだった？', '前向きです✨'], ['アポ取れた〜', 'さすが！'], ['お客さん来社だって', '会議室とっとくね']],
+    theme: { floorA: '#efd2aa', floorB: '#e9c89c', floorLine: '#e2bd8e', wallL: '#fbe9d6', wallR: '#f5dcc3', base: '#d9a47a', baseR: '#c99268', rug: '#ffd9c7', sofa: '#ff9fbf', desk: '#e2b07c', deskBody: '#c48e5c', accent: '#ff7aa8' },
+  },
+  admin: {
+    name: '事務部', icon: '🗂️', boxLabel: '書類トレー', boardTitle: 'TASK BOARD', poster: ['整理整頓', '✨🗂️'], mvpTitle: 'MVP',
+    roles: {
+      account: { label: '経理', task: '経理', icon: '🧾' },
+      general: { label: '総務', task: '総務', icon: '📦' },
+      hr: { label: '人事', task: '人事', icon: '🪪' },
+      legal: { label: '法務', task: '法務', icon: '⚖️' },
+    },
+    ideas: {
+      account: ['請求書を発行', '経費精算をチェック', '月次の仕訳を入力', '入金消込', '支払い予定表を更新'],
+      general: ['備品を発注', '会議室の予約を整理', '社内イベントの準備', '名刺を手配', '防災用品を点検'],
+      hr: ['勤怠を締める', '入社手続き', '給与計算を確認', '求人票を更新', '年末調整の案内'],
+      legal: ['契約書をチェック', 'NDAを締結', '就業規則を改訂', '利用規約の見直し', '押印申請を処理'],
+    },
+    workLines: {
+      account: ['電卓パチパチ🧮', '1円合わない…', '仕訳完了✓', '領収書どこ〜', '締め日まであと少し'],
+      general: ['在庫チェック📦', '発注しました！', '会議室ダブってる…', 'ラベル貼り貼り', '備品足りてる？'],
+      hr: ['勤怠ポチポチ', '書類そろった✓', '入社日決定！', '有給残数確認…', 'ようこそ〜🌸'],
+      legal: ['この条項は…🤔', '赤入れ中✍️', 'リスクなし✓', '押印お願いします', '最新の法改正確認'],
+    },
+    chats: [['今日締め日だっけ？', '明日です〜'], ['コピー機また詰まった', '直しとくね'], ['新しい人いつ来るの？', '来週の月曜！'], ['ハンコ持ってる？', 'はいどうぞ']],
+    theme: { floorA: '#e3ebf2', floorB: '#d8e3ec', floorLine: '#c9d7e3', wallL: '#f1f6fa', wallR: '#e3edf4', base: '#a9bccb', baseR: '#97adbf', rug: '#cdeedd', sofa: '#8fc8ff', desk: '#f3f5f8', deskBody: '#c4cdd8', accent: '#4f9be0' },
+  },
 };
+const DEPT_KEYS = Object.keys(DEPTS);
+
 const DIFF = {
-  easy:   { label: '★',   work: 22, reward: 10 },
-  normal: { label: '★★',  work: 42, reward: 20 },
-  hard:   { label: '★★★', work: 70, reward: 38 },
-};
-const TASK_IDEAS = {
-  research: ['競合サービスを調査', '最新AIニュースまとめ', 'ユーザーアンケート分析', '市場規模をざっくり試算', 'SNSの反応をリサーチ', '料金プランを比較'],
-  writing:  ['ブログ記事を執筆', 'メルマガの下書き', 'プレスリリース作成', 'FAQページを整備', 'SNS投稿を10本', '採用ページの文章'],
-  code:     ['ログインのバグ修正', 'APIのテスト追加', 'ページ表示を高速化', 'ダークモード対応', 'CSV出力機能を実装', '依存パッケージ更新'],
-  design:   ['バナー画像を作成', 'LPのワイヤーフレーム', 'アプリアイコン3案', '配色ガイドを作成', 'OGP画像をデザイン', '名刺デザイン'],
-};
-const WORK_LINES = {
-  research: ['データ集めてます…', 'なるほど…🤔', 'グラフにしよ📊', 'ソースを確認中', '面白い傾向が！'],
-  writing:  ['いい書き出し思いついた', '推敲中…', '誤字チェック✓', 'うーん言い回し…', '見出し決まった！'],
-  code:     ['カタカタ…⌨️', 'テスト通った！', 'このバグ手強い…', 'console.log…', 'リファクタしよ'],
-  design:   ['配色どうしよ🎨', 'いい感じ✨', '余白を調整…', 'フォント選び中', 'もう少し可愛く'],
+  easy:   { label: '★',   work: 22 },
+  normal: { label: '★★',  work: 42 },
+  hard:   { label: '★★★', work: 70 },
 };
 const IDLE_LINES = ['ひまだな〜', '次のタスクまだかな', 'ストレッチ〜🙆', '今日もがんばろ', 'ふんふふ〜ん♪', '🌸'];
 const CHATS = [
   ['おつかれ〜！', 'おつかれさま✨'], ['コーヒー飲んだ？', '3杯目です☕'], ['新しいタスクまだかな', 'のんびりしよ〜'],
-  ['そのアクセかわいいね', 'ありがと💕'], ['最近どう？', 'レベル上げ中！'], ['お昼なに食べる？', 'カレー🍛'],
-  ['バグ見つけちゃった', 'えっ、どこ!?'], ['いい天気だね', '窓きれい〜'],
+  ['そのアクセかわいいね', 'ありがと💕'], ['最近どう？', 'レベル上げ中！'], ['お昼なに食べる？', 'カレー🍛'], ['いい天気だね', '窓きれい〜'],
 ];
-const NAMES = ['アイ', 'クロ', 'ミク', 'ジェミ', 'ポン', 'ソラ', 'ルナ', 'テツ', 'ハル', 'ココ', 'ユウ', 'リン', 'ノア', 'モモ', 'レオ', 'ナギ', 'チャピ', 'ラマ'];
+const NAMES = ['アイ', 'クロ', 'ミク', 'ジェミ', 'ポン', 'ソラ', 'ルナ', 'テツ', 'ハル', 'ココ', 'ユウ', 'リン', 'ノア', 'モモ', 'レオ', 'ナギ', 'チャピ', 'ラマ', 'サク', 'メイ'];
 
 const SKINS = ['#ffe3cc', '#f9d2b3', '#eab793', '#c98f68', '#8e5b3c'];
 const HAIRS = ['#3b2a20', '#7a4a2a', '#e9b95c', '#f6a6c4', '#7fb6ff', '#a184ff', '#57cfae', '#ececf2', '#ff7b5a', '#26232b'];
@@ -70,16 +101,16 @@ const ACCENTS = ['#ff6b9a', '#ffd23f', '#4dc3ff', '#7ae582', '#b18cff', '#ffffff
 const STYLES = { short: 'ショート', long: 'ロング', bob: 'ボブ', twin: 'ツイン', spiky: 'ツンツン', bun: 'おだんご' };
 const ACCS = { none: 'なし', antenna: 'アンテナ', headphones: 'ヘッドホン', glasses: 'メガネ', ribbon: 'リボン', neko: 'ネコミミ' };
 
-/* ---------- 部屋レイアウト ---------- */
+/* ---------- 部屋レイアウト（両部署で共通の間取り） ---------- */
 const DESKS = [[2, 3], [4, 3], [6, 3], [2, 6], [4, 6], [6, 6]];
 const COFFEE_SPOTS = [[8, 1], [7, 1], [9, 1]];
 const OUTBOX_SPOTS = [[1, 4], [1, 3], [1, 5]];
 const SOFA_SPOTS = [[1, 7], [1, 8]];
-const HIRE_COST = 100;
 
+// shelf / feature は部署ごとに見た目が変わる（営業：トロフィー棚・売上ボード、事務：書庫・コピー機）
 const FURNITURE = [
   { kind: 'shelf', x: 2, y: 0 }, { kind: 'shelf', x: 3, y: 0 },
-  { kind: 'server', x: 5, y: 0 },
+  { kind: 'feature', x: 5, y: 0 },
   { kind: 'coffee', x: 8, y: 0 },
   { kind: 'plant', x: 9, y: 0 }, { kind: 'plant', x: 0, y: 9 }, { kind: 'plant', x: 9, y: 9 },
   { kind: 'outbox', x: 0, y: 4 },
@@ -181,12 +212,21 @@ function charSVG(lk) {
 /* =========================================================
  *  家具 SVG
  * ========================================================= */
-function furnitureSVG(f) {
+function furnitureSVG(f, key) {
+  const th = DEPTS[key].theme;
   switch (f.kind) {
     case 'desk': {
-      let s = box(0.1, 0.18, 0.8, 0.64, 20, 0, '#c48e5c');
-      s += box(0.04, 0.1, 0.92, 0.8, 4, 20, '#e2b07c');
-      s += poly([[0.1, 0.52, 24.2], [0.28, 0.52, 24.2], [0.28, 0.82, 24.2], [0.1, 0.82, 24.2]], '#fffdf5');
+      let s = box(0.1, 0.18, 0.8, 0.64, 20, 0, th.deskBody);
+      s += box(0.04, 0.1, 0.92, 0.8, 4, 20, th.desk);
+      if (key === 'sales') {
+        // 卓上電話
+        s += box(0.1, 0.55, 0.2, 0.24, 4, 24, '#3d4252');
+        s += box(0.12, 0.57, 0.08, 0.2, 3, 28, '#5a6072');
+      } else {
+        // 書類の山とバインダー
+        s += box(0.1, 0.52, 0.18, 0.26, 7, 24, '#fffdf5');
+        s += box(0.75, 0.52, 0.08, 0.26, 14, 24, '#4f9be0');
+      }
       s += box(0.3, 0.34, 0.36, 0.28, 2, 24, '#cfd4dc');
       s += poly([[0.3, 0.62, 26], [0.66, 0.62, 26], [0.68, 0.64, 40], [0.32, 0.64, 40]], '#a7afbd');
       const [lx, ly] = L(0.49, 0.63, 33);
@@ -195,29 +235,52 @@ function furnitureSVG(f) {
       return s;
     }
     case 'shelf': {
+      if (key === 'admin') {
+        // 書庫キャビネット
+        let s = box(0.06, 0.04, 0.9, 0.46, 74, 0, '#b8c4d0');
+        for (let r = 0; r < 4; r++) {
+          const z = 6 + r * 17;
+          s += poly([[0.12, 0.505, z], [0.9, 0.505, z], [0.9, 0.505, z + 14], [0.12, 0.505, z + 14]], '#cdd7e1');
+          const [hx, hy] = L(0.51, 0.505, z + 7);
+          s += `<rect x="${hx - 5}" y="${hy - 1.5}" width="10" height="3" rx="1.5" fill="#7f8fa0"/>`;
+        }
+        return s;
+      }
+      // トロフィー棚
       let s = box(0.06, 0.04, 0.9, 0.46, 74, 0, '#a8774a');
-      const colors = ['#ff8fab', '#7ec4ff', '#ffd166', '#8fe3a3', '#c49bff', '#ffa36c'];
       [8, 32, 54].forEach((z, r) => {
-        for (let i = 0; i < 6; i++) {
-          if ((i + r) % 5 === 4) continue;
-          const x = 0.1 + i * 0.135, h = 14 + ((i * 7 + r * 3) % 6);
-          s += poly([[x, 0.505, z], [x + 0.11, 0.505, z], [x + 0.11, 0.505, z + h], [x, 0.505, z + h]], colors[(i + r * 2) % colors.length]);
+        for (let i = 0; i < 3; i++) {
+          const [cx, cy] = L(0.22 + i * 0.28, 0.4, z);
+          const gold = (i + r) % 3 === 1 ? '#d6dbe3' : '#ffcf4d';
+          s += `<rect x="${cx - 3}" y="${cy - 4}" width="6" height="4" fill="#7a5233"/>`;
+          s += `<rect x="${cx - 1}" y="${cy - 9}" width="2" height="5" fill="${gold}"/>`;
+          s += `<path d="M${cx - 5},${cy - 17} h10 q0,8 -5,8 q-5,0 -5,-8z" fill="${gold}"/>`;
         }
       });
       return s;
     }
-    case 'server': {
-      let s = box(0.12, 0.08, 0.76, 0.58, 86, 0, '#3a4256');
-      const ledColors = ['#5fffb0', '#4dc3ff', '#ff6b9a', '#ffd23f'];
-      for (let r = 0; r < 6; r++) {
-        s += poly([[0.18, 0.665, 10 + r * 12], [0.82, 0.665, 10 + r * 12], [0.82, 0.665, 18 + r * 12], [0.18, 0.665, 18 + r * 12]], '#2a3042');
-        for (let i = 0; i < 3; i++) {
-          const [cx, cy] = L(0.26 + i * 0.1, 0.665, 14 + r * 12);
-          s += `<circle class="led" style="animation-delay:${(r * 0.37 + i * 0.6) % 1.4}s" cx="${cx}" cy="${cy}" r="1.7" fill="${ledColors[(r + i) % 4]}"/>`;
-        }
+    case 'feature': {
+      if (key === 'admin') {
+        // コピー機
+        let s = box(0.1, 0.1, 0.8, 0.6, 44, 0, '#e8ecf1');
+        s += box(0.14, 0.14, 0.72, 0.52, 5, 44, '#9aa6b5');
+        s += box(0.9, 0.25, 0.2, 0.35, 3, 26, '#ffffff');
+        s += poly([[0.16, 0.705, 8], [0.86, 0.705, 8], [0.86, 0.705, 22], [0.16, 0.705, 22]], '#d3dae3');
+        const [cx, cy] = L(0.75, 0.705, 36);
+        s += `<circle class="led" cx="${cx}" cy="${cy}" r="2" fill="#5fffb0"/>`;
+        const [tx, ty] = L(0.5, 0.4, 66);
+        s += `<text x="${tx}" y="${ty}" font-size="9" font-weight="800" text-anchor="middle" fill="#7f8fa0">COPY</text>`;
+        return s;
       }
-      const [tx, ty] = L(0.5, 0.37, 94);
-      s += `<text x="${tx}" y="${ty}" font-size="9" font-weight="800" text-anchor="middle" fill="#7a86a8">AI CORE</text>`;
+      // 売上ボード（スタンド式ホワイトボード）
+      let s = box(0.15, 0.4, 0.06, 0.06, 26, 0, '#8a94a6') + box(0.8, 0.4, 0.06, 0.06, 26, 0, '#8a94a6');
+      s += poly([[0.05, 0.47, 24], [0.95, 0.47, 24], [0.95, 0.47, 86], [0.05, 0.47, 86]], '#ffffff', 'stroke="#b9c3d6" stroke-width="2"');
+      [18, 26, 22, 34, 40].forEach((h, i) => {
+        const x = 0.15 + i * 0.15;
+        s += poly([[x, 0.47, 32], [x + 0.09, 0.47, 32], [x + 0.09, 0.47, 32 + h], [x, 0.47, 32 + h]], i === 4 ? '#ff7aa8' : '#ffc2d6');
+      });
+      const [tx, ty] = L(0.5, 0.47, 92);
+      s += `<text x="${tx}" y="${ty}" font-size="8" font-weight="800" text-anchor="middle" fill="#ff7aa8">受注件数</text>`;
       return s;
     }
     case 'coffee': {
@@ -239,15 +302,16 @@ function furnitureSVG(f) {
       return s;
     }
     case 'outbox': {
-      let s = box(0.12, 0.15, 0.7, 0.66, 36, 0, '#6aaef0');
-      s += poly([[0.82, 0.3, 26], [0.82, 0.66, 26], [0.82, 0.66, 30], [0.82, 0.3, 30]], '#2f5f94');
+      const c = th.accent;
+      let s = box(0.12, 0.15, 0.7, 0.66, 36, 0, shade(c, 0.25));
+      s += poly([[0.82, 0.3, 26], [0.82, 0.66, 26], [0.82, 0.66, 30], [0.82, 0.3, 30]], shade(c, -0.4));
       const [tx, ty] = L(0.45, 0.48, 58);
-      s += `<rect x="${tx - 24}" y="${ty - 11}" width="48" height="16" rx="8" fill="#fff" stroke="#6aaef0" stroke-width="1.5"/>`;
-      s += `<text x="${tx}" y="${ty + 1}" font-size="9" font-weight="800" text-anchor="middle" fill="#2f5f94">納品BOX</text>`;
+      s += `<rect x="${tx - 27}" y="${ty - 11}" width="54" height="16" rx="8" fill="#fff" stroke="${c}" stroke-width="1.5"/>`;
+      s += `<text x="${tx}" y="${ty + 1}" font-size="9" font-weight="800" text-anchor="middle" fill="${shade(c, -0.4)}">${DEPTS[key].boxLabel}</text>`;
       return s;
     }
     case 'sofa': {
-      const c = '#ff9fbf';
+      const c = th.sofa;
       let s = box(0.04, 0.05, 0.28, 1.9, 40, 0, shade(c, -0.08));
       s += box(0.2, 0.05, 0.7, 1.9, 14, 0, c);
       s += box(0.25, 0.25, 0.62, 0.72, 5, 14, shade(c, 0.25));
@@ -260,26 +324,24 @@ function furnitureSVG(f) {
   return '';
 }
 
-function roomSVG() {
+function roomSVG(key) {
+  const dp = DEPTS[key], th = dp.theme;
   let s = '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop id="sky1" offset="0" stop-color="#8fd3ff"/><stop id="sky2" offset="1" stop-color="#d8f1ff"/></linearGradient></defs>';
   const W = (list, fill, extra = '') => `<polygon points="${list.map(([x, y, z]) => P(x, y, z).join(',')).join(' ')}" fill="${fill}" ${extra}/>`;
-  // walls
-  s += W([[0, 0, 0], [0, N, 0], [0, N, WALL], [0, 0, WALL]], '#fbe9d6');
-  s += W([[0, 0, 0], [N, 0, 0], [N, 0, WALL], [0, 0, WALL]], '#f5dcc3');
-  s += W([[0, 0, 0], [0, N, 0], [0, N, 9], [0, 0, 9]], '#d9a47a');
-  s += W([[0, 0, 0], [N, 0, 0], [N, 0, 9], [0, 0, 9]], '#c99268');
-  s += W([[0, N, WALL], [0, 0, WALL], [-0.25, -0.25, WALL], [-0.25, N, WALL]], '#fff6ec');
-  s += W([[0, 0, WALL], [N, 0, WALL], [N, -0.25, WALL], [-0.25, -0.25, WALL]], '#fff6ec');
+  s += W([[0, 0, 0], [0, N, 0], [0, N, WALL], [0, 0, WALL]], th.wallL);
+  s += W([[0, 0, 0], [N, 0, 0], [N, 0, WALL], [0, 0, WALL]], th.wallR);
+  s += W([[0, 0, 0], [0, N, 0], [0, N, 9], [0, 0, 9]], th.base);
+  s += W([[0, 0, 0], [N, 0, 0], [N, 0, 9], [0, 0, 9]], th.baseR);
+  s += W([[0, N, WALL], [0, 0, WALL], [-0.25, -0.25, WALL], [-0.25, N, WALL]], '#fffaf4');
+  s += W([[0, 0, WALL], [N, 0, WALL], [N, -0.25, WALL], [-0.25, -0.25, WALL]], '#fffaf4');
 
-  // floor
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-    s += W([[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]].map(([a, b]) => [a, b, 0]), (x + y) % 2 ? '#e9c89c' : '#efd2aa', 'stroke="#e2bd8e" stroke-width=".6"');
+    s += W([[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]].map(([a, b]) => [a, b, 0]), (x + y) % 2 ? th.floorB : th.floorA, `stroke="${th.floorLine}" stroke-width=".6"`);
   }
-  // rug
-  s += W([[2.6, 7.4, 0], [7.6, 7.4, 0], [7.6, 9.5, 0], [2.6, 9.5, 0]], '#bfe0f5');
+  s += W([[2.6, 7.4, 0], [7.6, 7.4, 0], [7.6, 9.5, 0], [2.6, 9.5, 0]], th.rug);
   s += W([[2.85, 7.6, 0], [7.35, 7.6, 0], [7.35, 9.3, 0], [2.85, 9.3, 0]], 'none', 'stroke="#fff" stroke-width="2" stroke-dasharray="6 5"');
 
-  // right wall decor (plane y=0): (u,v) -> (u, 0.5u + v)
+  // 右の壁（y=0 平面）: (u,v) -> (u, 0.5u + v)
   const [rx, ry] = P(0, 0, 0);
   s += `<g transform="matrix(1,0.5,0,1,${rx},${ry})">
     <rect x="58" y="-142" width="80" height="58" rx="4" fill="url(#sky)" stroke="#fff" stroke-width="5"/>
@@ -287,23 +349,23 @@ function roomSVG() {
     <circle id="sun" cx="118" cy="-126" r="7" fill="#fff3a6"/>
     <path d="M98,-142 L98,-84 M58,-113 L138,-113" stroke="#fff" stroke-width="3"/>
     <ellipse cx="74" cy="-96" rx="10" ry="4" fill="#fff" opacity=".85"/>
-    <circle cx="218" cy="-112" r="15" fill="#fff" stroke="#c99268" stroke-width="3"/>
+    <circle cx="218" cy="-112" r="15" fill="#fff" stroke="${th.baseR}" stroke-width="3"/>
     <line id="hourHand" x1="218" y1="-112" x2="218" y2="-120" stroke="#5a4636" stroke-width="2.4" stroke-linecap="round"/>
-    <line id="minHand" x1="218" y1="-112" x2="218" y2="-124" stroke="#ff7aa8" stroke-width="1.6" stroke-linecap="round"/>
-    <rect x="262" y="-134" width="42" height="52" rx="3" fill="#fff" stroke="#e2b07c" stroke-width="3"/>
-    <text x="283" y="-121" font-size="7" font-weight="800" text-anchor="middle" fill="#c99268">MVP</text>
-    <text id="mvpName" x="283" y="-100" font-size="10" font-weight="800" text-anchor="middle" fill="#ff7aa8">-</text>
+    <line id="minHand" x1="218" y1="-112" x2="218" y2="-124" stroke="${th.accent}" stroke-width="1.6" stroke-linecap="round"/>
+    <rect x="258" y="-134" width="50" height="52" rx="3" fill="#fff" stroke="${th.base}" stroke-width="3"/>
+    <text x="283" y="-121" font-size="7" font-weight="800" text-anchor="middle" fill="${th.baseR}">${dp.mvpTitle}</text>
+    <text id="mvpName" x="283" y="-100" font-size="10" font-weight="800" text-anchor="middle" fill="${th.accent}">-</text>
     <text x="283" y="-89" font-size="9" text-anchor="middle">👑</text>
   </g>`;
 
-  // left wall decor (plane x=0): (u,v) -> (u, -0.5u + v), origin at y=N
+  // 左の壁（x=0 平面）: (u,v) -> (u, -0.5u + v)
   const [lx, ly] = P(0, N, 0);
   s += `<g transform="matrix(1,-0.5,0,1,${lx},${ly})">
-    <rect x="44" y="-128" width="66" height="56" rx="6" fill="#fff" stroke="#ff9fbf" stroke-width="3"/>
-    <text x="77" y="-108" font-size="11" font-weight="800" text-anchor="middle" fill="#ff7aa8">AI OFFICE</text>
-    <text x="77" y="-90" font-size="16" text-anchor="middle">🤖💕</text>
+    <rect x="44" y="-128" width="66" height="56" rx="6" fill="#fff" stroke="${th.accent}" stroke-width="3"/>
+    <text x="77" y="-108" font-size="11" font-weight="800" text-anchor="middle" fill="${th.accent}">${dp.poster[0]}</text>
+    <text x="77" y="-90" font-size="16" text-anchor="middle">${dp.poster[1]}</text>
     <rect x="190" y="-138" width="112" height="70" rx="5" fill="#ffffff" stroke="#b9c3d6" stroke-width="3"/>
-    <text x="246" y="-122" font-size="10" font-weight="800" text-anchor="middle" fill="#5f6caf">TASK BOARD</text>
+    <text x="246" y="-122" font-size="10" font-weight="800" text-anchor="middle" fill="#5f6caf">${dp.boardTitle}</text>
     <text id="wbQueue" x="200" y="-104" font-size="10" fill="#4a3f55">待ち 0</text>
     <text id="wbDoing" x="200" y="-90" font-size="10" fill="#4a3f55">作業中 0</text>
     <text id="wbDone" x="200" y="-76" font-size="10" fill="#4a3f55">完了 0</text>
@@ -314,12 +376,18 @@ function roomSVG() {
 
 /* =========================================================
  *  ゲーム状態
+ *  state.depts に部署ごとの agents / tasks を持ち、両部署を同時に進める。
+ *  D はいま処理中の部署（シミュレーション・描画・入力はすべて D を見る）。
  * ========================================================= */
 let state;
+let D;
 const els = new Map();
 let selectedId = null;
 let speed = 1;
 const timers = [];
+
+const roles = () => DEPTS[D.key].roles;
+const viewing = () => D === state.depts[state.view];
 
 function randomLook() {
   return {
@@ -347,21 +415,36 @@ function makeTask(title, type, diff, assignee = null) {
 }
 
 function newGame() {
-  state = { nextId: 1, time: 0, coins: 30, agents: [], tasks: [], autoTask: true, nextAuto: 25 };
-  state.agents.push(makeAgent('アイ', 'research', { skin: '#ffe3cc', hair: '#f6a6c4', outfit: '#7ec4ff', accent: '#4dc3ff', style: 'long', acc: 'antenna' }, 0));
-  state.agents.push(makeAgent('クロ', 'code', { skin: '#f9d2b3', hair: '#26232b', outfit: '#3a3f52', accent: '#ff6b9a', style: 'spiky', acc: 'headphones' }, 1));
-  state.agents.push(makeAgent('ミク', 'writing', { skin: '#ffe3cc', hair: '#57cfae', outfit: '#ff8fb1', accent: '#ff6b9a', style: 'twin', acc: 'ribbon' }, 2));
-  state.tasks.push(makeTask('最新AIニュースまとめ', 'research', 'easy'));
-  state.tasks.push(makeTask('ログインのバグ修正', 'code', 'normal'));
-  state.tasks.push(makeTask('ブログ記事を執筆', 'writing', 'normal'));
-  state.tasks.push(makeTask('バナー画像を作成', 'design', 'easy'));
+  state = { nextId: 1, time: 0, autoTask: true, view: 'sales', depts: {} };
+  const seed = {
+    sales: [
+      ['ハル', 'inside', { skin: '#f9d2b3', hair: '#7a4a2a', outfit: '#5f6caf', accent: '#ffd23f', style: 'short', acc: 'headphones' }],
+      ['モモ', 'proposal', { skin: '#ffe3cc', hair: '#f6a6c4', outfit: '#ff8fb1', accent: '#ff6b9a', style: 'bob', acc: 'ribbon' }],
+      ['レオ', 'field', { skin: '#eab793', hair: '#26232b', outfit: '#3a3f52', accent: '#4dc3ff', style: 'spiky', acc: 'none' }],
+      ['ソラ', 'cs', { skin: '#ffe3cc', hair: '#7fb6ff', outfit: '#8fe3a3', accent: '#ffffff', style: 'long', acc: 'antenna' }],
+    ],
+    admin: [
+      ['ミク', 'account', { skin: '#ffe3cc', hair: '#57cfae', outfit: '#f5f5f5', accent: '#ff6b9a', style: 'twin', acc: 'glasses' }],
+      ['アイ', 'general', { skin: '#ffe3cc', hair: '#e9b95c', outfit: '#ffd166', accent: '#7ae582', style: 'bun', acc: 'none' }],
+      ['クロ', 'hr', { skin: '#f9d2b3', hair: '#3b2a20', outfit: '#7ec4ff', accent: '#b18cff', style: 'short', acc: 'neko' }],
+      ['リン', 'legal', { skin: '#f9d2b3', hair: '#a184ff', outfit: '#3a3f52', accent: '#4dc3ff', style: 'long', acc: 'glasses' }],
+    ],
+  };
+  DEPT_KEYS.forEach((key) => {
+    D = state.depts[key] = { key, agents: [], tasks: [], nextAuto: rand(15, 30) };
+    seed[key].forEach(([n, r, lk], i) => D.agents.push(makeAgent(n, r, lk, i)));
+    const ideas = DEPTS[key].ideas;
+    Object.keys(ideas).slice(0, 3).forEach((type, i) => D.tasks.push(makeTask(ideas[type][0], type, ['easy', 'normal', 'normal'][i])));
+  });
+  D = state.depts[state.view];
 }
 
-const SAVE_KEY = 'ai-agent-office-v1';
+const SAVE_KEY = 'ai-agent-office-v2';
 function save() {
   try {
-    const data = { ...state, agents: state.agents.map((a) => ({ ...a, path: [], bubble: null })) };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    const depts = {};
+    DEPT_KEYS.forEach((k) => { const d = state.depts[k]; depts[k] = { ...d, agents: d.agents.map((a) => ({ ...a, path: [], bubble: null })) }; });
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, depts }));
   } catch (e) { /* storage unavailable */ }
 }
 function load() {
@@ -369,28 +452,33 @@ function load() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return false;
     state = JSON.parse(raw);
-    state.agents.forEach((a) => {
-      // 途中の移動は保存しないので、所属タイルに戻して再開
-      if (a.sitting === 'desk') { const [dx, dy] = DESKS[a.desk]; a.tile = [dx, dy - 1]; }
-      a.x = a.tile[0] + 0.5; a.y = a.tile[1] + 0.5; a.sitting = null; a.path = [];
-      a.state = 'idle'; a.wait = 0; a.after = null; a.onArrive = null; a.idleT = 0.5;
+    DEPT_KEYS.forEach((k) => {
+      const d = state.depts[k];
+      d.agents.forEach((a) => {
+        // 途中の移動は保存しないので、所属タイルに戻して再開
+        if (a.sitting === 'desk') { const [dx, dy] = DESKS[a.desk]; a.tile = [dx, dy - 1]; }
+        a.x = a.tile[0] + 0.5; a.y = a.tile[1] + 0.5; a.sitting = null; a.path = [];
+        a.state = 'idle'; a.wait = 0; a.after = null; a.onArrive = null; a.idleT = 0.5;
+      });
+      d.tasks.forEach((t) => { if (t.status === 'doing' && !d.agents.some((a) => a.taskId === t.id)) { t.status = 'queued'; t.agentId = null; } });
     });
-    state.tasks.forEach((t) => { if (t.status === 'doing' && !state.agents.some((a) => a.taskId === t.id)) { t.status = 'queued'; t.agentId = null; } });
+    D = state.depts[state.view];
     return true;
   } catch (e) { return false; }
 }
 
-const taskById = (id) => state.tasks.find((t) => t.id === id);
-const agentById = (id) => state.agents.find((a) => a.id === id);
+const taskById = (id) => D.tasks.find((t) => t.id === id);
+const agentById = (id) => D.agents.find((a) => a.id === id);
 
-/* ---------- 時間差イベント（ゲーム内時間） ---------- */
-function later(delay, fn) { timers.push({ at: state.time + delay, fn }); }
+/* ---------- 時間差イベント（ゲーム内時間・部署を覚えておく） ---------- */
+function later(delay, fn) { timers.push({ at: state.time + delay, fn, dept: D }); }
 
 function say(a, text, dur = 2.8) {
   a.bubble = { text, until: state.time + dur };
 }
 
 function floatText(x, y, text) {
+  if (!viewing()) return;
   const [sx, sy] = P(x, y);
   const d = document.createElement('div');
   d.className = 'float';
@@ -404,14 +492,18 @@ function toast(text) {
   const d = document.createElement('div');
   d.className = 'toast';
   d.textContent = text;
-  $('#toasts').appendChild(d);
+  const box = $('#toasts');
+  box.appendChild(d);
+  while (box.children.length > 3) box.firstChild.remove();
   setTimeout(() => d.remove(), 3300);
 }
+// 見ていない部署の出来事は部署名つきで通知
+const deptToast = (text) => toast(viewing() ? text : `${DEPTS[D.key].icon}${DEPTS[D.key].name}：${text}`);
 
 /* =========================================================
  *  エージェントの行動
  * ========================================================= */
-const occupied = (a, t) => state.agents.some((o) => o !== a && o.tile[0] === t[0] && o.tile[1] === t[1]);
+const occupied = (a, t) => D.agents.some((o) => o !== a && o.tile[0] === t[0] && o.tile[1] === t[1]);
 
 function goTo(a, tile, onArrive, extraPoint) {
   const points = [];
@@ -470,7 +562,7 @@ function wander(a) {
 }
 
 function startChat(a) {
-  const others = state.agents.filter((b) => b !== a && b.state === 'idle' && !b.path.length && !b.sitting && !b.taskId);
+  const others = D.agents.filter((b) => b !== a && b.state === 'idle' && !b.path.length && !b.sitting && !b.taskId);
   if (!others.length) return wander(a);
   const b = pick(others);
   const spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [b.tile[0] + dx, b.tile[1] + dy]).find((t) => walkable(t[0], t[1]) && !occupied(a, t));
@@ -478,7 +570,7 @@ function startChat(a) {
   b.state = 'chat'; b.wait = 8; b.waitKind = 'chat'; b.after = () => { b.state = 'idle'; };
   a.state = 'chat';
   goTo(a, spot, () => {
-    const [l1, l2] = pick(CHATS);
+    const [l1, l2] = pick(Math.random() < 0.5 ? DEPTS[D.key].chats : CHATS);
     const toB = (b.x - a.x) - (b.y - a.y);
     a.flip = toB < 0; b.flip = !a.flip;
     say(a, l1, 2.2);
@@ -489,10 +581,10 @@ function startChat(a) {
 }
 
 function pickTask(a) {
-  const queued = state.tasks.filter((t) => t.status === 'queued');
+  const queued = D.tasks.filter((t) => t.status === 'queued');
   return queued.find((t) => t.assignee === a.id)
     || queued.find((t) => !t.assignee && t.type === a.role)
-    || queued.find((t) => !t.assignee && !state.agents.some((o) => o !== a && o.role === t.type && o.state === 'idle' && !o.taskId))
+    || queued.find((t) => !t.assignee && !D.agents.some((o) => o !== a && o.role === t.type && o.state === 'idle' && !o.taskId))
     || null;
 }
 
@@ -525,14 +617,14 @@ function work(a, dt) {
   const rate = (t.type === a.role ? 1.6 : 1) * (1 + 0.08 * (a.level - 1)) * (a.energy > 15 ? 1 : 0.55);
   t.progress = Math.min(t.work, t.progress + dt * rate);
   a.energy = clamp(a.energy - dt * 1.15, 0, 100);
-  if (!a.bubble && Math.random() < dt * 0.1) say(a, pick(WORK_LINES[t.type]));
+  if (!a.bubble && Math.random() < dt * 0.1) say(a, pick(DEPTS[D.key].workLines[t.type]));
   if (t.progress >= t.work) return deliver(a, t);
   if (a.energy < 10) { say(a, 'ちょっと休憩…💦'); goCoffee(a); }
 }
 
 function deliver(a, t) {
   a.state = 'deliver';
-  say(a, pick(['できた！', '完成〜✨', '納品しまーす']));
+  say(a, pick(['できた！', '完了〜✨', '提出しまーす']));
   const spot = OUTBOX_SPOTS.find((s) => !occupied(a, s)) || OUTBOX_SPOTS[0];
   goTo(a, spot, () => {
     a.flip = true;
@@ -542,19 +634,17 @@ function deliver(a, t) {
 }
 
 function complete(a, t) {
-  const reward = DIFF[t.diff].reward + (a.level - 1) * 2;
   t.status = 'done'; t.doneAt = state.time; t.agentId = a.id; t.agentName = a.name;
   t.result = makeResult(t, a);
   a.taskId = null; a.done++;
   a.xp += t.work * 2;
-  state.coins += reward;
-  floatText(1, 4, `+${reward}🪙`);
-  toast(`✅ ${a.name}が「${t.title}」を納品！ +${reward}🪙`);
+  floatText(1, 4, '✅');
+  deptToast(`✅ ${a.name}が「${t.title}」を完了！`);
   const need = a.level * 100;
   if (a.xp >= need) {
     a.xp -= need; a.level++;
     later(0.6, () => { say(a, `レベル${a.level}になった！🎉`, 3); floatText(a.x, a.y, 'LEVEL UP!'); });
-    toast(`🎉 ${a.name}が Lv${a.level} にレベルアップ！`);
+    deptToast(`🎉 ${a.name}が Lv${a.level} にレベルアップ！`);
   } else {
     say(a, pick(['ふぅ、おわり！', '次いこ〜', 'お役に立てたかな？']));
   }
@@ -563,27 +653,44 @@ function complete(a, t) {
 }
 
 function makeResult(t, a) {
-  const R = ROLES[t.type];
-  const n = () => Math.floor(rand(3, 9));
+  const R = roles()[t.type];
+  const n = (lo = 3, hi = 9) => Math.floor(rand(lo, hi));
+  const yen = () => `${n(12, 98) * 10}万円`;
   const bodies = {
-    research: [
-      `■ 要点\n・主要プレイヤーは${n()}社。上位3社でシェアの約${Math.floor(rand(55, 80))}%\n・ユーザーの不満は「料金」と「使いづらさ」に集中\n・伸びているのは${pick(['個人向け', '中小企業向け', 'モバイル', 'AI連携'])}の領域`,
-      `■ 推奨アクション\n1. ${pick(['無料プランの導線改善', 'オンボーディング短縮', '事例コンテンツ拡充'])}\n2. ${pick(['価格ページのA/Bテスト', '競合比較表の公開', 'SNSでの発信強化'])}`,
+    inside: [
+      `■ 架電結果\n・コール数：${n(30, 60)}件\n・接続：${n(10, 20)}件\n・アポ獲得：${n(2, 6)}件（うち決裁者アポ ${n(1, 3)}件）`,
+      `■ 次のアクション\n・資料送付 ${n(3, 8)}件 → 来週フォロー\n・${pick(['リストを業種別に再整理', 'トークスクリプトを改善', '架電時間帯を午前に変更'])}`,
     ],
-    writing: [
-      `■ タイトル案\n「${pick(['知らないと損する', '3分でわかる', 'プロが教える', 'はじめての'])}${t.title.replace(/を.*$/, '')}」`,
-      `■ 構成\n1. 導入：読者の悩みに共感\n2. 本題：ポイントを${n()}つに整理\n3. 事例：具体的なビフォーアフター\n4. まとめ：次の一歩を提案\n\n文字数：約${Math.floor(rand(18, 45)) * 100}字`,
+    proposal: [
+      `■ 提案の骨子\n1. 現状の課題：${pick(['手作業の多さ', '情報の属人化', '問い合わせ対応の遅れ'])}\n2. 解決策：自社サービスの導入\n3. 効果：工数 ${n(20, 50)}% 削減見込み`,
+      `■ お見積り\n・初期費用：${yen()}\n・月額：${n(3, 15)}万円\n・スライド ${n(8, 20)} 枚で作成済み`,
     ],
-    code: [
-      `■ 変更内容\n・${pick(['原因はキャッシュの不整合でした', 'null チェック漏れを修正', 'N+1クエリを解消', '型定義を厳密化'])}\n・ユニットテストを${n()}件追加（すべて ✅ pass）`,
-      `■ 結果\n・${pick(['表示速度が約2.1倍に', 'エラー率 0.8% → 0.02%', 'ビルド時間 -35%', 'Lighthouse 98点'])}\n・レビュー依頼済み：PR #${Math.floor(rand(100, 999))}`,
+    field: [
+      `■ 商談メモ\n・参加者：${pick(['部長・課長', '社長', '情報システム部の2名'])}\n・温度感：${pick(['◎ 前向き', '○ 検討中', '△ 予算次第'])}\n・懸念点：${pick(['導入スケジュール', '既存ツールとの連携', '費用対効果'])}`,
+      `■ 見込み\n・受注確度：${n(4, 9) * 10}%\n・想定金額：${yen()}\n・次回：${pick(['来週デモ', '稟議用資料を送付', '契約書ドラフト送付'])}`,
     ],
-    design: [
-      `■ コンセプト\n「${pick(['やさしく、たのしく', '信頼感とワクワク', 'シンプル・イズ・ベスト', 'ポップで元気'])}」`,
-      `■ 仕様\n・メインカラー：${pick(['#FF7AA8 ピンク', '#6FB6FF スカイ', '#5FD39A ミント', '#FFD166 レモン'])}\n・フォント：丸ゴシック\n・バリエーション：${n()}案（おすすめは B 案）`,
+    cs: [
+      `■ ヒアリング結果\n・満足度：${pick(['★★★★★', '★★★★☆', '★★★☆☆'])}\n・よく使う機能：${pick(['レポート', '自動通知', 'データ連携'])}\n・要望：${pick(['スマホ対応', 'CSV出力', '権限設定の細分化'])}`,
+      `■ 対応\n・${pick(['活用勉強会を提案', '上位プランを案内', '開発チームに要望を共有'])}\n・解約リスク：${pick(['低', '中 → 来月再フォロー', '低（継続意向あり）'])}`,
+    ],
+    account: [
+      `■ 処理内容\n・対象：${n(10, 60)}件\n・合計金額：${n(100, 900)}万円\n・差異：${pick(['なし ✓', '1件（確認済み）', 'なし（照合完了）'])}`,
+      `■ メモ\n・${pick(['インボイス番号の記載漏れ 1件を差し戻し', '期日どおり処理完了', '来月から電子化予定'])}`,
+    ],
+    general: [
+      `■ 対応内容\n・${t.title}：完了\n・手配先：${pick(['いつもの業者さん', 'ネット通販', '総務部長に確認済み'])}\n・費用：${n(1, 9)}万${n(1, 9)}千円`,
+      `■ 共有事項\n・${pick(['在庫表を更新しました', '社内チャットで告知済み', '次回は月末に点検予定'])}`,
+    ],
+    hr: [
+      `■ 処理状況\n・対象者：${n(5, 40)}名\n・不備：${pick(['なし ✓', '2名分を本人に確認中', 'なし（全員提出済み）'])}`,
+      `■ 次の予定\n・${pick(['入社オリエンを来週月曜に実施', '給与明細は25日に配信', '求人媒体に掲載予定'])}`,
+    ],
+    legal: [
+      `■ レビュー結果\n・確認条項：${n(10, 30)}条\n・修正提案：${n(1, 5)}か所（${pick(['損害賠償の上限', '再委託の条件', '秘密保持の期間'])}など）`,
+      `■ 判定\n・${pick(['このまま締結OK', '修正後に締結OK', '先方と再交渉が必要'])}\n・保管先：契約書フォルダ`,
     ],
   };
-  return `${R.icon} ${t.title}\n担当：${a.name}（Lv${a.level} ${ROLES[a.role].label}）\n\n${bodies[t.type].join('\n\n')}`;
+  return `${R.icon} ${t.title}\n担当：${a.name}（Lv${a.level} ${roles()[a.role].label}）\n\n${bodies[t.type].join('\n\n')}`;
 }
 
 /* ---------- 毎フレームの更新 ---------- */
@@ -624,48 +731,56 @@ function updateAgent(a, dt) {
 
 function autoTasks(dt) {
   if (!state.autoTask) return;
-  state.nextAuto -= dt;
-  if (state.nextAuto > 0) return;
-  state.nextAuto = rand(18, 38);
-  if (state.tasks.filter((t) => t.status === 'queued').length >= 6) return;
-  const type = pick(Object.keys(ROLES));
+  D.nextAuto -= dt;
+  if (D.nextAuto > 0) return;
+  D.nextAuto = rand(18, 38);
+  if (D.tasks.filter((t) => t.status === 'queued').length >= 6) return;
+  const ideas = DEPTS[D.key].ideas;
+  const type = pick(Object.keys(ideas));
   const diff = pick(['easy', 'easy', 'normal', 'normal', 'hard']);
-  state.tasks.push(makeTask(pick(TASK_IDEAS[type]), type, diff));
-  toast(`📨 新しい依頼：「${state.tasks[state.tasks.length - 1].title}」`);
+  const t = makeTask(pick(ideas[type]), type, diff);
+  D.tasks.push(t);
+  if (viewing()) toast(`📨 新しい依頼：「${t.title}」`);
   dirty = true;
 }
 
 function step(dt) {
-  state.time += dt;
-  for (let i = timers.length - 1; i >= 0; i--) if (timers[i].at <= state.time) { const t = timers.splice(i, 1)[0]; t.fn(); }
-  state.agents.forEach((a) => updateAgent(a, dt));
+  for (let i = timers.length - 1; i >= 0; i--) {
+    if (timers[i].dept === D && timers[i].at <= state.time) { const t = timers.splice(i, 1)[0]; t.fn(); }
+  }
+  D.agents.forEach((a) => updateAgent(a, dt));
   autoTasks(dt);
   // 完了ログは最新 40 件だけ残す
-  const done = state.tasks.filter((t) => t.status === 'done');
-  if (done.length > 40) { const drop = new Set(done.slice(0, done.length - 40).map((t) => t.id)); state.tasks = state.tasks.filter((t) => !drop.has(t.id)); }
+  const done = D.tasks.filter((t) => t.status === 'done');
+  if (done.length > 40) { const drop = new Set(done.slice(0, done.length - 40).map((t) => t.id)); D.tasks = D.tasks.filter((t) => !drop.has(t.id)); }
 }
 
 /* =========================================================
  *  描画
  * ========================================================= */
 function buildRoom() {
-  $('#room').innerHTML = roomSVG();
+  els.forEach((el) => el.remove()); els.clear();
+  $('#fx').innerHTML = '';
+  $('#room').innerHTML = roomSVG(D.key);
   const layer = $('#entities');
+  layer.innerHTML = '';
   FURNITURE.forEach((f) => {
     const d = document.createElement('div');
     d.className = 'furn';
     const [sx, sy] = P(f.x, f.y);
     d.style.transform = `translate(${sx}px,${sy}px)`;
     d.style.zIndex = Math.round((f.x + f.y + ((f.w || 1) + (f.d || 1)) / 2) * 100);
-    d.innerHTML = `<svg width="1" height="1">${furnitureSVG(f)}</svg>`;
+    d.innerHTML = `<svg width="1" height="1">${furnitureSVG(f, D.key)}</svg>`;
     if (f.kind === 'desk') d.dataset.desk = f.desk;
     layer.appendChild(d);
   });
+  document.documentElement.style.setProperty('--dept', DEPTS[D.key].theme.accent);
+  dirty = true;
 }
 
 function syncDeskColors() {
   document.querySelectorAll('.furn[data-desk]').forEach((d) => {
-    const owner = state.agents.find((a) => a.desk === +d.dataset.desk);
+    const owner = D.agents.find((a) => a.desk === +d.dataset.desk);
     d.style.color = owner ? owner.look.accent === '#ffffff' ? owner.look.outfit : owner.look.accent : '#d5dae2';
   });
 }
@@ -685,7 +800,7 @@ function agentEl(a) {
 }
 
 function renderAgents() {
-  state.agents.forEach((a) => {
+  D.agents.forEach((a) => {
     const el = agentEl(a);
     const lookKey = JSON.stringify(a.look);
     if (el._look !== lookKey) { el.querySelector('.figure').innerHTML = charSVG(a.look); el._look = lookKey; }
@@ -742,30 +857,37 @@ function renderRoomLive() {
 
 let dirty = true;
 function renderUI() {
-  const queued = state.tasks.filter((t) => t.status === 'queued');
-  const doing = state.tasks.filter((t) => t.status === 'doing');
-  const done = state.tasks.filter((t) => t.status === 'done');
-  const totalDone = state.agents.reduce((s, a) => s + a.done, 0);
+  const queued = D.tasks.filter((t) => t.status === 'queued');
+  const doing = D.tasks.filter((t) => t.status === 'doing');
+  const done = D.tasks.filter((t) => t.status === 'done');
+  const totalDone = D.agents.reduce((s, a) => s + a.done, 0);
 
-  $('#coins').textContent = state.coins;
-  $('#doneCount').textContent = totalDone;
+  $('#doneCount').textContent = DEPT_KEYS.reduce((s, k) => s + state.depts[k].agents.reduce((x, a) => x + a.done, 0), 0);
   $('#wbQueue').textContent = `待ち ${queued.length}`;
   $('#wbDoing').textContent = `作業中 ${doing.length}`;
   $('#wbDone').textContent = `完了 ${totalDone}`;
-  const mvp = state.agents.slice().sort((a, b) => b.done - a.done)[0];
+  const mvp = D.agents.slice().sort((a, b) => b.done - a.done)[0];
   $('#mvpName').textContent = mvp && mvp.done ? mvp.name : '-';
 
-  // 作業中（進捗は毎回更新）
+  // 部署タブ
+  $('#deptTabs').innerHTML = DEPT_KEYS.map((k) => {
+    const d = state.depts[k], dp = DEPTS[k];
+    const busy = d.tasks.filter((t) => t.status === 'doing').length;
+    const wait = d.tasks.filter((t) => t.status === 'queued').length;
+    return `<button class="tab${k === state.view ? ' on' : ''}" data-dept="${k}" style="--c:${dp.theme.accent}">
+      <span class="ti">${dp.icon}</span><b>${dp.name}</b><small>作業中 ${busy} ・ 待ち ${wait}</small></button>`;
+  }).join('');
+
   $('#doingList').innerHTML = doing.length ? doing.map((t) => {
     const a = agentById(t.agentId);
-    return `<li><span>${ROLES[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${esc(a ? a.name : '')}</span><span class="mini"><i style="width:${(t.progress / t.work * 100).toFixed(0)}%"></i></span></li>`;
+    return `<li><span>${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${esc(a ? a.name : '')}</span><span class="mini"><i style="width:${(t.progress / t.work * 100).toFixed(0)}%"></i></span></li>`;
   }).join('') : '<li class="empty">いまは誰も作業していません</li>';
 
-  // ロスター
-  $('#roster').innerHTML = state.agents.map((a) => `
+  $('#roster').innerHTML = D.agents.map((a) => `
     <div class="chip" data-agent="${a.id}">
       <div class="face">${charSVG(a.look)}</div>
       <b>${esc(a.name)} <small>Lv${a.level}</small></b>
+      <span class="role">${roles()[a.role].icon} ${roles()[a.role].label}</span>
       <span>${statusText(a)}</span>
       <div class="en"><i style="width:${a.energy.toFixed(0)}%"></i></div>
     </div>`).join('');
@@ -774,21 +896,29 @@ function renderUI() {
   dirty = false;
   syncDeskColors();
 
+  const dp = DEPTS[D.key];
+  document.querySelectorAll('[data-deptname]').forEach((e) => { e.textContent = dp.name; });
   $('#queueCount').textContent = queued.length ? `(${queued.length})` : '';
   $('#queueList').innerHTML = queued.length ? queued.map((t) => {
     const who = t.assignee ? agentById(t.assignee) : null;
-    return `<li><span>${ROLES[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${DIFF[t.diff].label}${who ? ' → ' + esc(who.name) : ''}</span><button class="x" data-del="${t.id}" title="取り消す">✕</button></li>`;
+    return `<li><span>${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${DIFF[t.diff].label}${who ? ' → ' + esc(who.name) : ''}</span><button class="x" data-del="${t.id}" title="取り消す">✕</button></li>`;
   }).join('') : '<li class="empty">依頼待ちのタスクはありません</li>';
 
   $('#doneList').innerHTML = done.length ? done.slice().reverse().map((t) =>
-    `<li class="clickable" data-result="${t.id}"><span>${ROLES[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${esc(t.agentName || '')} ${DIFF[t.diff].label}</span></li>`
+    `<li class="clickable" data-result="${t.id}"><span>${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${esc(t.agentName || '')} ${DIFF[t.diff].label}</span></li>`
   ).join('') : '<li class="empty">まだ完了したタスクはありません</li>';
 
+  const typeSel = $('#taskType');
+  if (typeSel.dataset.dept !== D.key) {
+    typeSel.dataset.dept = D.key;
+    typeSel.innerHTML = Object.entries(roles()).map(([k, r]) => `<option value="${k}">${r.icon} ${r.task}</option>`).join('');
+    $('#taskTitle').placeholder = `例：${dp.ideas[Object.keys(dp.ideas)[0]][0]}`;
+  }
   const sel = $('#taskAssignee'), cur = sel.value;
-  sel.innerHTML = '<option value="">担当：おまかせ</option>' + state.agents.map((a) => `<option value="${a.id}">担当：${esc(a.name)}（${ROLES[a.role].label}）</option>`).join('');
-  sel.value = state.agents.some((a) => String(a.id) === cur) ? cur : '';
-
-  $('#hireBtn').textContent = `＋ 採用 (${HIRE_COST}🪙)`;
+  sel.innerHTML = '<option value="">担当：おまかせ</option>' + D.agents.map((a) => `<option value="${a.id}">担当：${esc(a.name)}（${roles()[a.role].label}）</option>`).join('');
+  sel.value = D.agents.some((a) => String(a.id) === cur) ? cur : '';
+  $('#hireBtn').disabled = D.agents.length >= DESKS.length;
+  $('#hireBtn').textContent = D.agents.length >= DESKS.length ? 'デスク満席' : '＋ 採用';
 }
 
 function statusText(a) {
@@ -796,13 +926,23 @@ function statusText(a) {
   switch (a.state) {
     case 'work': return `💻 ${t ? t.title : '作業中'}`;
     case 'toDesk': return '🚶 デスクへ';
-    case 'deliver': return '📦 納品中';
+    case 'deliver': return '📦 提出中';
     case 'coffee': return '☕ コーヒー休憩';
     case 'sofa': return '🛋️ ひと休み';
     case 'chat': return '💬 おしゃべり';
     case 'walk': return '🚶 おさんぽ';
     default: return t ? '⏸ 作業待ち' : '😊 ひま';
   }
+}
+
+function switchDept(key) {
+  if (key === state.view) return;
+  closeModals();
+  state.view = key;
+  D = state.depts[key];
+  buildRoom();
+  renderRoomLive();
+  renderUI();
 }
 
 /* =========================================================
@@ -825,12 +965,17 @@ function renderAgentModal() {
   if (!a) return;
   $('#agentPreview').innerHTML = charSVG(a.look);
   if (document.activeElement !== $('#agentName')) $('#agentName').value = a.name;
-  $('#agentRole').value = a.role;
+  const rs = $('#agentRole');
+  if (rs.dataset.dept !== D.key) {
+    rs.dataset.dept = D.key;
+    rs.innerHTML = Object.entries(roles()).map(([k, r]) => `<option value="${k}">${r.icon} ${r.label}</option>`).join('');
+  }
+  rs.value = a.role;
   $('#agentLv').textContent = a.level;
   $('#agentXp').style.width = (a.xp / (a.level * 100) * 100) + '%';
   $('#agentEnergy').style.width = a.energy + '%';
   $('#agentStatus').textContent = statusText(a);
-  $('#agentDone').textContent = `これまでの納品：${a.done}件 ／ デスク #${a.desk + 1}`;
+  $('#agentDone').textContent = `${DEPTS[D.key].name} ・ これまでの完了：${a.done}件 ・ デスク #${a.desk + 1}`;
 
   const sw = (key, list) => list.map((c) => `<button class="sw${a.look[key] === c ? ' on' : ''}" style="background:${c}" data-look="${key}" data-val="${c}" aria-label="${c}"></button>`).join('');
   const opt = (key, map) => Object.entries(map).map(([k, v]) => `<button class="opt${a.look[key] === k ? ' on' : ''}" data-look="${key}" data-val="${k}">${v}</button>`).join('');
@@ -845,37 +990,37 @@ function renderAgentModal() {
 
 let candidate = null;
 function rollCandidate() {
-  const used = new Set(state.agents.map((a) => a.name));
+  const used = new Set(DEPT_KEYS.flatMap((k) => state.depts[k].agents.map((a) => a.name)));
   const name = pick(NAMES.filter((n) => !used.has(n))) || 'エージェント';
-  candidate = { name, role: pick(Object.keys(ROLES)), look: randomLook() };
+  candidate = { name, role: pick(Object.keys(roles())), look: randomLook() };
   $('#hirePreview').innerHTML = charSVG(candidate.look);
   $('#hireName').textContent = candidate.name;
-  $('#hireRole').textContent = `${ROLES[candidate.role].icon} ${ROLES[candidate.role].label}`;
-  const freeDesk = DESKS.findIndex((_, i) => !state.agents.some((a) => a.desk === i));
+  $('#hireRole').textContent = `${DEPTS[D.key].icon} ${DEPTS[D.key].name} ・ ${roles()[candidate.role].icon} ${roles()[candidate.role].label}`;
+  const freeDesk = DESKS.findIndex((_, i) => !D.agents.some((a) => a.desk === i));
   const btn = $('#confirmHire');
-  if (freeDesk < 0) { btn.disabled = true; btn.textContent = 'デスクが満席です'; }
-  else if (state.coins < HIRE_COST) { btn.disabled = true; btn.textContent = `🪙 あと${HIRE_COST - state.coins}枚`; }
-  else { btn.disabled = false; btn.textContent = `採用する (${HIRE_COST}🪙)`; }
+  btn.disabled = freeDesk < 0;
+  btn.textContent = freeDesk < 0 ? 'デスクが満席です' : `${DEPTS[D.key].name}に採用する`;
 }
 
 /* =========================================================
  *  入力
  * ========================================================= */
 function bindUI() {
-  $('#taskType').innerHTML = Object.entries(ROLES).map(([k, r]) => `<option value="${k}">${r.icon} ${r.task}</option>`).join('');
-  $('#agentRole').innerHTML = Object.entries(ROLES).map(([k, r]) => `<option value="${k}">${r.icon} ${r.label}</option>`).join('');
-
   document.querySelectorAll('.speed button').forEach((b) => b.addEventListener('click', () => {
     speed = +b.dataset.speed;
     document.querySelectorAll('.speed button').forEach((x) => x.classList.toggle('on', x === b));
   }));
 
+  $('#deptTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dept]');
+    if (b) switchDept(b.dataset.dept);
+  });
+
   $('#autoTask').checked = state.autoTask;
   $('#autoTask').addEventListener('change', (e) => { state.autoTask = e.target.checked; });
 
   $('#diceBtn').addEventListener('click', () => {
-    const type = $('#taskType').value;
-    $('#taskTitle').value = pick(TASK_IDEAS[type]);
+    $('#taskTitle').value = pick(DEPTS[D.key].ideas[$('#taskType').value]);
   });
 
   $('#taskForm').addEventListener('submit', (e) => {
@@ -883,16 +1028,16 @@ function bindUI() {
     const title = $('#taskTitle').value.trim();
     if (!title) return;
     const assignee = $('#taskAssignee').value ? +$('#taskAssignee').value : null;
-    state.tasks.push(makeTask(title, $('#taskType').value, $('#taskDiff').value, assignee));
+    D.tasks.push(makeTask(title, $('#taskType').value, $('#taskDiff').value, assignee));
     $('#taskTitle').value = '';
-    toast(`📨 「${title}」を依頼しました`);
+    toast(`📨 ${DEPTS[D.key].name}に「${title}」を依頼しました`);
     dirty = true; save();
   });
 
   $('#queueList').addEventListener('click', (e) => {
     const id = e.target.closest('[data-del]')?.dataset.del;
     if (!id) return;
-    state.tasks = state.tasks.filter((t) => t.id !== +id);
+    D.tasks = D.tasks.filter((t) => t.id !== +id);
     dirty = true;
   });
 
@@ -903,7 +1048,7 @@ function bindUI() {
     if (!t) return;
     $('#resultTitle').textContent = `🏆 ${t.title}`;
     const m = 9 * 60 + Math.floor(t.doneAt);
-    $('#resultMeta').textContent = `${ROLES[t.type].task} ・ ${DIFF[t.diff].label} ・ Day ${Math.floor(m / 1440) + 1} ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} 納品`;
+    $('#resultMeta').textContent = `${DEPTS[D.key].name} ・ ${roles()[t.type].task} ・ ${DIFF[t.diff].label} ・ Day ${Math.floor(m / 1440) + 1} ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} 完了`;
     $('#resultBody').textContent = t.result;
     openModal('#resultModal');
   });
@@ -932,14 +1077,13 @@ function bindUI() {
   $('#hireBtn').addEventListener('click', () => { rollCandidate(); openModal('#hireModal'); });
   $('#rerollBtn').addEventListener('click', rollCandidate);
   $('#confirmHire').addEventListener('click', () => {
-    const freeDesk = DESKS.findIndex((_, i) => !state.agents.some((a) => a.desk === i));
-    if (freeDesk < 0 || state.coins < HIRE_COST || !candidate) return;
-    state.coins -= HIRE_COST;
+    const freeDesk = DESKS.findIndex((_, i) => !D.agents.some((a) => a.desk === i));
+    if (freeDesk < 0 || !candidate) return;
     const a = makeAgent(candidate.name, candidate.role, candidate.look, freeDesk);
     a.x = 1.5; a.y = 4.5; a.tile = [1, 4]; a.energy = 100;
-    state.agents.push(a);
+    D.agents.push(a);
     say(a, 'よろしくお願いします！🙇');
-    toast(`🎊 ${a.name}がオフィスに加わりました！`);
+    toast(`🎊 ${a.name}が${DEPTS[D.key].name}に加わりました！`);
     closeModals(); dirty = true; save();
   });
 
@@ -955,8 +1099,9 @@ function bindUI() {
     clearTimeout(resetArmed); resetArmed = null; btn.textContent = '↺';
     toast('🧹 オフィスを最初からやり直しました');
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
-    els.forEach((el) => el.remove()); els.clear(); timers.length = 0;
-    newGame(); dirty = true;
+    timers.length = 0;
+    closeModals();
+    newGame(); buildRoom();
     $('#autoTask').checked = state.autoTask;
   });
 
@@ -985,9 +1130,13 @@ function frame(now) {
   const real = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (speed > 0) {
-    // 速度を上げてもキャラが壁抜けしないよう細かく刻む
+    // 速度を上げてもキャラが壁抜けしないよう細かく刻む。見ていない部署も裏で進める
     const total = real * speed, n = Math.ceil(total / 0.05);
-    for (let i = 0; i < n; i++) step(total / n);
+    for (let i = 0; i < n; i++) {
+      state.time += total / n;
+      DEPT_KEYS.forEach((k) => { D = state.depts[k]; step(total / n); });
+    }
+    D = state.depts[state.view];
   }
   renderAgents();
   uiAcc += real; saveAcc += real;

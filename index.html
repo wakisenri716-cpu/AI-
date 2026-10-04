@@ -14,8 +14,7 @@
   <div class="logo">🏢 <span>AIエージェント オフィス</span></div>
   <div class="stats">
     <span class="pill" id="clock">Day 1 09:00</span>
-    <span class="pill coin">🪙 <b id="coins">0</b></span>
-    <span class="pill">✅ <b id="doneCount">0</b></span>
+    <span class="pill">✅ 完了 <b id="doneCount">0</b></span>
   </div>
   <div class="controls">
     <div class="speed" role="group" aria-label="ゲーム速度">
@@ -31,6 +30,8 @@
 </header>
 
 <main class="layout">
+  <div class="main-col">
+  <nav class="tabs" id="deptTabs" aria-label="部署"></nav>
   <section class="viewport" id="viewport">
     <div class="stage" id="stage">
       <svg class="room" id="room" width="700" height="520"></svg>
@@ -39,22 +40,23 @@
     </div>
     <p class="hint">キャラをタップするとプロフィールと着せかえが開きます</p>
   </section>
+  </div>
 
   <aside class="side">
     <div class="card">
-      <h2>👥 エージェント</h2>
+      <h2>👥 <span data-deptname>営業部</span>のエージェント</h2>
       <div class="roster" id="roster"></div>
     </div>
 
     <div class="card">
-      <h2>📝 タスクを依頼</h2>
+      <h2>📝 <span data-deptname>営業部</span>にタスクを依頼</h2>
       <form id="taskForm" class="form">
         <div class="row">
-          <input id="taskTitle" placeholder="例：競合サービスを調査して" maxlength="40" required>
+          <input id="taskTitle" placeholder="例：リスト50件にアポ電" maxlength="40" required>
           <button type="button" class="btn small" id="diceBtn" title="ランダムなお題">🎲</button>
         </div>
         <div class="row">
-          <select id="taskType"></select>
+          <select id="taskType" aria-label="種類"></select>
           <select id="taskDiff">
             <option value="easy">かんたん ★</option>
             <option value="normal" selected>ふつう ★★</option>
@@ -116,7 +118,7 @@
       <div>
         <p class="cand-name" id="hireName"></p>
         <p class="sub" id="hireRole"></p>
-        <p class="sub">得意なタスクは 1.6倍速で進めます</p>
+        <p class="sub">得意な種類のタスクは 1.6倍速で進めます</p>
       </div>
     </div>
     <div class="row end">
