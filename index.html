@@ -6,26 +6,26 @@
 <title>AIエージェント オフィス</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="logo">🏢 <span>AIエージェント オフィス</span></div>
+  <div class="logo"><span class="mark">AI</span><span>エージェント オフィス</span></div>
   <div class="stats">
     <span class="pill" id="clock">Day 1 09:00</span>
-    <span class="pill">✅ 完了 <b id="doneCount">0</b></span>
+    <span class="pill">完了 <b id="doneCount">0</b></span>
   </div>
   <div class="controls">
     <div class="speed" role="group" aria-label="ゲーム速度">
-      <button data-speed="0" title="一時停止">⏸</button>
-      <button data-speed="1" class="on">▶</button>
-      <button data-speed="2">▶▶</button>
-      <button data-speed="4">⏩</button>
+      <button data-speed="0" title="一時停止">停止</button>
+      <button data-speed="1" class="on">×1</button>
+      <button data-speed="2">×2</button>
+      <button data-speed="4">×4</button>
     </div>
     <label class="toggle"><input type="checkbox" id="autoTask" checked> 自動でタスク発生</label>
-    <button class="btn primary" id="hireBtn">＋ 採用</button>
-    <button class="btn ghost" id="resetBtn" title="最初からやり直す">↺</button>
+    <button class="btn primary" id="hireBtn">採用</button>
+    <button class="btn ghost" id="resetBtn" title="最初からやり直す">リセット</button>
   </div>
 </header>
 
@@ -38,15 +38,15 @@
       <div class="entities" id="entities"></div>
       <div class="fx" id="fx"></div>
     </div>
-    <p class="hint">キャラをタップするとプロフィールと着せかえが開きます</p>
+    <p class="hint">人物をクリックすると詳細と外見の設定を開きます</p>
   </section>
   </div>
 
   <aside class="side">
     <div class="card cmd">
-      <h2>💬 文で指示する</h2>
+      <h2>文で指示する</h2>
       <form id="cmdForm" class="cmd-form">
-        <textarea id="cmdInput" rows="2" maxlength="200" placeholder="例：ハルにC社へアポ電して。あと、事務部で請求書の発行を急ぎでお願い"></textarea>
+        <textarea id="cmdInput" rows="2" maxlength="200" placeholder="例：佐藤にC社へアポ電して。あと、事務部で請求書の発行を急ぎでお願い"></textarea>
         <button class="btn primary" type="submit">指示する</button>
       </form>
       <div class="examples" id="cmdExamples"></div>
@@ -54,23 +54,23 @@
     </div>
 
     <div class="card">
-      <h2>👥 <span data-deptname>営業部</span>のエージェント</h2>
+      <h2><span data-deptname>営業部</span>のエージェント</h2>
       <div class="roster" id="roster"></div>
     </div>
 
     <div class="card">
-      <h2>📝 <span data-deptname>営業部</span>にタスクを依頼</h2>
+      <h2><span data-deptname>営業部</span>にタスクを依頼</h2>
       <form id="taskForm" class="form">
         <div class="row">
           <input id="taskTitle" placeholder="例：リスト50件にアポ電" maxlength="40" required>
-          <button type="button" class="btn small" id="diceBtn" title="ランダムなお題">🎲</button>
+          <button type="button" class="btn small" id="diceBtn" title="お題をランダムに入れる">例文</button>
         </div>
         <div class="row">
           <select id="taskType" aria-label="種類"></select>
           <select id="taskDiff">
-            <option value="easy">かんたん ★</option>
-            <option value="normal" selected>ふつう ★★</option>
-            <option value="hard">むずかしい ★★★</option>
+            <option value="easy">軽め ★</option>
+            <option value="normal" selected>標準 ★★</option>
+            <option value="hard">重め ★★★</option>
           </select>
         </div>
         <div class="row">
@@ -81,17 +81,17 @@
     </div>
 
     <div class="card">
-      <h2>⚙️ 作業中</h2>
+      <h2>稼働中</h2>
       <ul class="list" id="doingList"></ul>
     </div>
 
     <div class="card">
-      <h2>📥 待ちタスク <small id="queueCount"></small></h2>
+      <h2>待ちタスク <small id="queueCount"></small></h2>
       <ul class="list" id="queueList"></ul>
     </div>
 
     <div class="card">
-      <h2>🏆 完了ログ</h2>
+      <h2>完了ログ</h2>
       <ul class="list" id="doneList"></ul>
     </div>
   </aside>
@@ -103,7 +103,7 @@
     <div class="profile">
       <div class="preview" id="agentPreview"></div>
       <div class="info">
-        <label class="name-label" for="agentName">✏️ 名前（タップして変更）</label>
+        <label class="name-label" for="agentName">名前（クリックして変更）</label>
         <input class="name-input" id="agentName" maxlength="8" autocomplete="off">
         <p class="err" id="agentNameErr"></p>
         <div class="row">
@@ -111,12 +111,12 @@
           <select id="agentRole"></select>
         </div>
         <div class="meter"><span>Lv <b id="agentLv"></b></span><div class="bar"><i id="agentXp"></i></div></div>
-        <div class="meter"><span>元気</span><div class="bar energy"><i id="agentEnergy"></i></div></div>
+        <div class="meter"><span>体力</span><div class="bar energy"><i id="agentEnergy"></i></div></div>
         <p class="status" id="agentStatus"></p>
         <p class="sub" id="agentDone"></p>
       </div>
     </div>
-    <h3>着せかえ</h3>
+    <h3>外見</h3>
     <div class="custom" id="customizer"></div>
   </div>
 </div>
@@ -128,7 +128,7 @@
     <div class="candidate">
       <div class="preview" id="hirePreview"></div>
       <div>
-        <label class="name-label" for="hireNameInput">✏️ 名前を決める</label>
+        <label class="name-label" for="hireNameInput">名前</label>
         <input class="name-input" id="hireNameInput" maxlength="8" autocomplete="off">
         <p class="err" id="hireErr"></p>
         <p class="sub" id="hireRole"></p>
@@ -136,7 +136,7 @@
       </div>
     </div>
     <div class="row end">
-      <button class="btn" id="rerollBtn">🎲 別の候補</button>
+      <button class="btn" id="rerollBtn">別の候補</button>
       <button class="btn primary" id="confirmHire"></button>
     </div>
   </div>
