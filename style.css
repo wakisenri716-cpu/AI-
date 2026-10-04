@@ -74,7 +74,7 @@ button, input, select { font: inherit; color: inherit; }
 .viewport {
   position: relative; overflow: hidden;
   border-radius: 24px;
-  background: radial-gradient(ellipse at 50% 30%, #fff 0%, #ffe6f0 55%, #e3efff 100%);
+  background: radial-gradient(ellipse at 50% 30%, #fff4fb 0%, #ffd6ea 55%, #dcd2ff 100%);
   border: 3px solid #fff;
   box-shadow: 0 8px 30px rgba(180, 120, 160, .18);
   align-self: start;
@@ -96,6 +96,28 @@ button, input, select { font: inherit; color: inherit; }
 .steam { animation: steam 2.4s ease-in-out infinite; opacity: 0; }
 @keyframes steam { 0% { opacity: 0; transform: translateY(4px); } 40% { opacity: .7; } 100% { opacity: 0; transform: translateY(-10px); } }
 
+/* ---------- パチンコ台 ---------- */
+.neon { animation: neon 2.2s ease-in-out infinite; }
+@keyframes neon { 0%, 100% { opacity: 1; } 45% { opacity: .55; } 50% { opacity: .95; } 53% { opacity: .6; } }
+.furn .fever-t { display: none; }
+.furn .lamp { opacity: .55; }
+.furn.playing .lamp { opacity: 1; animation: lamp .5s steps(2) infinite; }
+.furn.playing .reel { animation: reel .18s steps(2) infinite; }
+@keyframes lamp { 50% { opacity: .35; } }
+@keyframes reel { 50% { opacity: .2; transform: translateY(1px); } }
+.furn.fever .reel { display: none; }
+.furn.fever .fever-t { display: inline; animation: lamp .25s steps(2) infinite; }
+.furn.fever .scr { animation: fever .3s steps(3) infinite; }
+.furn.fever .lamp { opacity: 1; animation: fever-lamp .3s steps(3) infinite; }
+@keyframes fever { 0% { fill: #ff2e63; } 33% { fill: #ffb800; } 66% { fill: #7a2cff; } }
+@keyframes fever-lamp { 0% { fill: #ff2e63; } 33% { fill: #ffe14d; } 66% { fill: #4fe3ff; } }
+.agent .carry { display: none; position: absolute; left: -12px; bottom: 30px; width: 24px; height: 16px; }
+.agent.carry .carry { display: block; }
+.agent .carry svg { width: 100%; height: 100%; display: block; }
+@media (prefers-reduced-motion: reduce) {
+  .neon, .furn .lamp, .furn .reel, .furn .scr, .furn .fever-t { animation: none !important; }
+}
+
 /* ---------- agents ---------- */
 .agent { position: absolute; left: 0; top: 0; width: 0; height: 0; cursor: pointer; }
 .agent .shadow {
@@ -112,7 +134,7 @@ button, input, select { font: inherit; color: inherit; }
   border: 1.5px solid var(--line);
 }
 .agent.sit-desk .nm, .agent.sit-desk .shadow, .agent.sit-sofa .shadow { display: none; }
-.agent.sit-desk .figure { bottom: -4px; }
+.agent.sit-desk .figure { bottom: 5px; }
 .agent.sit-desk .legs { display: none; }
 .agent.sit-sofa .figure { bottom: -6px; }
 .agent.sit-sofa .leg { transform: scaleY(.55); transform-origin: 50% 0; transform-box: fill-box; }

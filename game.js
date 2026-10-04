@@ -34,7 +34,7 @@ function box(x, y, w, d, h, z, c, extra = '') {
 /* ---------- 部署ごとの定義（営業部 / 事務部） ---------- */
 const DEPTS = {
   sales: {
-    name: '営業部', icon: '💼', boxLabel: '報告BOX', boardTitle: 'SALES BOARD', poster: ['目標達成!', '🔥📈'], mvpTitle: 'TOP SALES',
+    name: '営業部', icon: '💼', hall: '営業部ホール', boxLabel: '景品カウンター', boardTitle: '本日の出玉', poster: ['新台入替!', '🎰🔥'], mvpTitle: '大当たり王',
     roles: {
       inside: { label: 'インサイドセールス', task: 'アポ獲得', icon: '📞' },
       proposal: { label: '提案担当', task: '提案書', icon: '📑' },
@@ -54,10 +54,10 @@ const DEPTS = {
       cs: ['使いこなせてますか？', '要望メモメモ📝', '満足度アップ↑', 'ご活用ありがとうございます', '次回もよろしくです'],
     },
     chats: [['今月あと何件？', 'あと3件で達成！'], ['A社どうだった？', '前向きです✨'], ['アポ取れた〜', 'さすが！'], ['お客さん来社だって', '会議室とっとくね']],
-    theme: { floorA: '#efd2aa', floorB: '#e9c89c', floorLine: '#e2bd8e', wallL: '#fbe9d6', wallR: '#f5dcc3', base: '#d9a47a', baseR: '#c99268', rug: '#ffd9c7', sofa: '#ff9fbf', desk: '#e2b07c', deskBody: '#c48e5c', accent: '#ff7aa8' },
+    theme: { floorA: '#c8323f', floorB: '#bd2b39', floorLine: '#a8222f', floorDot: '#ffd23f', wallL: '#3a2350', wallR: '#311d45', base: '#1f1430', baseR: '#1a1028', neon: '#ff4fa3', sofa: '#ff9fbf', vending: '#e8364f', machines: ['#ff5e7e', '#ffb02e', '#ff7ad1'], accent: '#ff4f8b' },
   },
   admin: {
-    name: '事務部', icon: '🗂️', boxLabel: '書類トレー', boardTitle: 'TASK BOARD', poster: ['整理整頓', '✨🗂️'], mvpTitle: 'MVP',
+    name: '事務部', icon: '🗂️', hall: '事務部ホール', boxLabel: '景品カウンター', boardTitle: '本日の出玉', poster: ['出玉UP!', '🎰✨'], mvpTitle: '大当たり王',
     roles: {
       account: { label: '経理', task: '経理', icon: '🧾' },
       general: { label: '総務', task: '総務', icon: '📦' },
@@ -77,7 +77,7 @@ const DEPTS = {
       legal: ['この条項は…🤔', '赤入れ中✍️', 'リスクなし✓', '押印お願いします', '最新の法改正確認'],
     },
     chats: [['今日締め日だっけ？', '明日です〜'], ['コピー機また詰まった', '直しとくね'], ['新しい人いつ来るの？', '来週の月曜！'], ['ハンコ持ってる？', 'はいどうぞ']],
-    theme: { floorA: '#e3ebf2', floorB: '#d8e3ec', floorLine: '#c9d7e3', wallL: '#f1f6fa', wallR: '#e3edf4', base: '#a9bccb', baseR: '#97adbf', rug: '#cdeedd', sofa: '#8fc8ff', desk: '#f3f5f8', deskBody: '#c4cdd8', accent: '#4f9be0' },
+    theme: { floorA: '#3249a8', floorB: '#2c419c', floorLine: '#24378a', floorDot: '#7ff0ff', wallL: '#22305e', wallR: '#1d2952', base: '#121a38', baseR: '#0f1630', neon: '#4fe3ff', sofa: '#8fc8ff', vending: '#2f7df0', machines: ['#4fb3ff', '#8a7bff', '#3fd6b0'], accent: '#3fa9ff' },
   },
 };
 const DEPT_KEYS = Object.keys(DEPTS);
@@ -102,20 +102,22 @@ const STYLES = { short: 'ショート', long: 'ロング', bob: 'ボブ', twin: 
 const ACCS = { none: 'なし', antenna: 'アンテナ', headphones: 'ヘッドホン', glasses: 'メガネ', ribbon: 'リボン', neko: 'ネコミミ' };
 
 /* ---------- 部屋レイアウト（両部署で共通の間取り） ---------- */
-const DESKS = [[2, 3], [4, 3], [6, 3], [2, 6], [4, 6], [6, 6]];
+// パチンコ台（エージェントの持ち台）。座る位置は台の手前（y+1）
+const DESKS = [[3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6]];
 const COFFEE_SPOTS = [[8, 1], [7, 1], [9, 1]];
 const OUTBOX_SPOTS = [[1, 4], [1, 3], [1, 5]];
 const SOFA_SPOTS = [[1, 7], [1, 8]];
 
-// shelf / feature は部署ごとに見た目が変わる（営業：トロフィー棚・売上ボード、事務：書庫・コピー機）
+// パチンコホール：景品棚・両替機・自販機・花輪・景品カウンター・休憩ソファ、台が2列（手前の列が持ち台）
 const FURNITURE = [
-  { kind: 'shelf', x: 2, y: 0 }, { kind: 'shelf', x: 3, y: 0 },
+  { kind: 'prize', x: 2, y: 0 }, { kind: 'prize', x: 3, y: 0 },
   { kind: 'feature', x: 5, y: 0 },
   { kind: 'coffee', x: 8, y: 0 },
-  { kind: 'plant', x: 9, y: 0 }, { kind: 'plant', x: 0, y: 9 }, { kind: 'plant', x: 9, y: 9 },
+  { kind: 'hanawa', x: 9, y: 0 }, { kind: 'plant', x: 0, y: 9 }, { kind: 'plant', x: 9, y: 9 },
   { kind: 'outbox', x: 0, y: 4 },
   { kind: 'sofa', x: 0, y: 7, w: 1, d: 2 },
-  ...DESKS.map(([x, y], i) => ({ kind: 'desk', x, y, desk: i })),
+  ...DESKS.map(([x, y], i) => ({ kind: 'machine', x, y, desk: i })),
+  ...[3, 4, 5, 6, 7, 8].map((x) => ({ kind: 'machine', x, y: 3 })),
 ];
 const blocked = new Set();
 FURNITURE.forEach((f) => {
@@ -215,82 +217,76 @@ function charSVG(lk) {
 function furnitureSVG(f, key) {
   const th = DEPTS[key].theme;
   switch (f.kind) {
-    case 'desk': {
-      let s = box(0.1, 0.18, 0.8, 0.64, 20, 0, th.deskBody);
-      s += box(0.04, 0.1, 0.92, 0.8, 4, 20, th.desk);
-      if (key === 'sales') {
-        // 卓上電話
-        s += box(0.1, 0.55, 0.2, 0.24, 4, 24, '#3d4252');
-        s += box(0.12, 0.57, 0.08, 0.2, 3, 28, '#5a6072');
-      } else {
-        // 書類の山とバインダー
-        s += box(0.1, 0.52, 0.18, 0.26, 7, 24, '#fffdf5');
-        s += box(0.75, 0.52, 0.08, 0.26, 14, 24, '#4f9be0');
-      }
-      s += box(0.3, 0.34, 0.36, 0.28, 2, 24, '#cfd4dc');
-      s += poly([[0.3, 0.62, 26], [0.66, 0.62, 26], [0.68, 0.64, 40], [0.32, 0.64, 40]], '#a7afbd');
-      const [lx, ly] = L(0.49, 0.63, 33);
-      s += `<ellipse cx="${lx}" cy="${ly}" rx="2.6" ry="2.4" fill="currentColor" opacity=".9"/>`;
-      s += box(0.74, 0.2, 0.1, 0.1, 7, 24, '#ffffff');
+    case 'machine': {
+      // パチンコ台：前面（y=0.8 の面）に盤面・液晶・上皿を描き、手前にイスを置く
+      const body = th.machines[(f.x + f.y) % th.machines.length];
+      let s = box(0.04, 0.15, 0.92, 0.7, 24, 0, '#3a3348');
+      s += box(0.08, 0.22, 0.84, 0.58, 78, 24, body);
+      const [ox, oy] = L(0.08, 0.8, 0);
+      const pins = [];
+      for (let i = 0; i < 14; i++) pins.push(`<circle cx="${(5 + (i * 7.3) % 17).toFixed(1)}" cy="${(-88 + (i * 5.1) % 26).toFixed(1)}" r=".7" fill="#9aa3b5"/>`);
+      s += `<g transform="matrix(1,0.5,0,1,${ox},${oy})">
+        <rect class="lamp" x="2" y="-101" width="23" height="6" rx="3" fill="currentColor"/>
+        <circle cx="13.4" cy="-76" r="12.5" fill="#e9f6ff" stroke="#c9ced8" stroke-width="1.6"/>
+        ${pins.join('')}
+        <rect class="scr" x="6" y="-81" width="15" height="10" rx="1.5" fill="#1a1530"/>
+        <text class="reel" x="13.5" y="-73.2" font-size="7" font-weight="800" text-anchor="middle" fill="#fff">7 3 5</text>
+        <text class="fever-t" x="13.5" y="-73.2" font-size="7" font-weight="800" text-anchor="middle" fill="#ffe14d">7 7 7</text>
+        <rect x="2" y="-60" width="23" height="9" rx="2" fill="#d9dde6"/>
+        <circle cx="7" cy="-54" r="1.6" fill="#b9bfcc"/><circle cx="10.5" cy="-55" r="1.6" fill="#b9bfcc"/><circle cx="14" cy="-54" r="1.6" fill="#b9bfcc"/>
+        <circle cx="22.5" cy="-48" r="2.6" fill="#f1f1f5" stroke="#9aa3b5"/>
+        <rect x="3" y="-46" width="16" height="5" rx="2" fill="#c3c8d3"/>
+      </g>`;
+      // イス
+      const [cx, cy] = L(0.5, 1.32, 0);
+      s += `<rect x="${cx - 1.6}" y="${cy - 17}" width="3.2" height="17" fill="#7d8494"/>`;
+      s += `<ellipse cx="${cx}" cy="${cy}" rx="6" ry="3" fill="#5c6170"/>`;
+      s += `<ellipse cx="${cx}" cy="${cy - 18}" rx="8" ry="4" fill="${shade(th.accent, -0.15)}"/><ellipse cx="${cx}" cy="${cy - 19.5}" rx="8" ry="4" fill="${th.accent}"/>`;
       return s;
     }
-    case 'shelf': {
-      if (key === 'admin') {
-        // 書庫キャビネット
-        let s = box(0.06, 0.04, 0.9, 0.46, 74, 0, '#b8c4d0');
-        for (let r = 0; r < 4; r++) {
-          const z = 6 + r * 17;
-          s += poly([[0.12, 0.505, z], [0.9, 0.505, z], [0.9, 0.505, z + 14], [0.12, 0.505, z + 14]], '#cdd7e1');
-          const [hx, hy] = L(0.51, 0.505, z + 7);
-          s += `<rect x="${hx - 5}" y="${hy - 1.5}" width="10" height="3" rx="1.5" fill="#7f8fa0"/>`;
-        }
-        return s;
-      }
-      // トロフィー棚
-      let s = box(0.06, 0.04, 0.9, 0.46, 74, 0, '#a8774a');
-      [8, 32, 54].forEach((z, r) => {
-        for (let i = 0; i < 3; i++) {
-          const [cx, cy] = L(0.22 + i * 0.28, 0.4, z);
-          const gold = (i + r) % 3 === 1 ? '#d6dbe3' : '#ffcf4d';
-          s += `<rect x="${cx - 3}" y="${cy - 4}" width="6" height="4" fill="#7a5233"/>`;
-          s += `<rect x="${cx - 1}" y="${cy - 9}" width="2" height="5" fill="${gold}"/>`;
-          s += `<path d="M${cx - 5},${cy - 17} h10 q0,8 -5,8 q-5,0 -5,-8z" fill="${gold}"/>`;
+    case 'prize': {
+      // 景品棚
+      let s = box(0.06, 0.04, 0.9, 0.46, 74, 0, '#f4ead8');
+      const colors = ['#ff5e7e', '#4fb3ff', '#ffd23f', '#7ae582', '#b18cff', '#ff9f43'];
+      [6, 30, 52].forEach((z, r) => {
+        let x = 0.1;
+        for (let i = 0; x < 0.85; i++) {
+          const w = 0.14 + ((i + r) % 3) * 0.05, h = 12 + ((i * 5 + r * 3) % 9);
+          s += poly([[x, 0.505, z], [x + w, 0.505, z], [x + w, 0.505, z + h], [x, 0.505, z + h]], colors[(i + r * 2) % colors.length]);
+          x += w + 0.03;
         }
       });
+      const [tx, ty] = L(0.5, 0.27, 84);
+      s += `<text x="${tx}" y="${ty}" font-size="8" font-weight="800" text-anchor="middle" fill="${th.accent}">景品</text>`;
       return s;
     }
     case 'feature': {
-      if (key === 'admin') {
-        // コピー機
-        let s = box(0.1, 0.1, 0.8, 0.6, 44, 0, '#e8ecf1');
-        s += box(0.14, 0.14, 0.72, 0.52, 5, 44, '#9aa6b5');
-        s += box(0.9, 0.25, 0.2, 0.35, 3, 26, '#ffffff');
-        s += poly([[0.16, 0.705, 8], [0.86, 0.705, 8], [0.86, 0.705, 22], [0.16, 0.705, 22]], '#d3dae3');
-        const [cx, cy] = L(0.75, 0.705, 36);
-        s += `<circle class="led" cx="${cx}" cy="${cy}" r="2" fill="#5fffb0"/>`;
-        const [tx, ty] = L(0.5, 0.4, 66);
-        s += `<text x="${tx}" y="${ty}" font-size="9" font-weight="800" text-anchor="middle" fill="#7f8fa0">COPY</text>`;
-        return s;
-      }
-      // 売上ボード（スタンド式ホワイトボード）
-      let s = box(0.15, 0.4, 0.06, 0.06, 26, 0, '#8a94a6') + box(0.8, 0.4, 0.06, 0.06, 26, 0, '#8a94a6');
-      s += poly([[0.05, 0.47, 24], [0.95, 0.47, 24], [0.95, 0.47, 86], [0.05, 0.47, 86]], '#ffffff', 'stroke="#b9c3d6" stroke-width="2"');
-      [18, 26, 22, 34, 40].forEach((h, i) => {
-        const x = 0.15 + i * 0.15;
-        s += poly([[x, 0.47, 32], [x + 0.09, 0.47, 32], [x + 0.09, 0.47, 32 + h], [x, 0.47, 32 + h]], i === 4 ? '#ff7aa8' : '#ffc2d6');
-      });
-      const [tx, ty] = L(0.5, 0.47, 92);
-      s += `<text x="${tx}" y="${ty}" font-size="8" font-weight="800" text-anchor="middle" fill="#ff7aa8">受注件数</text>`;
+      // 両替機
+      let s = box(0.15, 0.12, 0.7, 0.5, 70, 0, '#dfe3ec');
+      const [ox, oy] = L(0.15, 0.62, 0);
+      s += `<g transform="matrix(1,0.5,0,1,${ox},${oy})">
+        <rect x="3" y="-62" width="16" height="12" rx="2" fill="#1a1530"/>
+        <text x="11" y="-53" font-size="6" font-weight="800" text-anchor="middle" fill="#5fffb0">¥</text>
+        <rect x="4" y="-44" width="14" height="3" rx="1.5" fill="#8a91a3"/>
+        <rect x="4" y="-36" width="14" height="6" rx="1" fill="#c7ccd8"/>
+        <text x="11" y="-18" font-size="6" font-weight="800" text-anchor="middle" fill="#6b7287">両替</text>
+      </g>`;
       return s;
     }
     case 'coffee': {
-      let s = box(0.05, 0.05, 0.9, 0.6, 30, 0, '#efe7dc');
-      s += box(0.25, 0.1, 0.45, 0.38, 30, 30, '#4a4f5c');
-      s += box(0.38, 0.48, 0.16, 0.12, 6, 30, '#ffffff');
-      const [sx, sy] = L(0.46, 0.54, 40);
-      s += `<path class="steam" d="M${sx - 2},${sy} q-3,-5 0,-9 q3,-4 0,-8" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>`;
-      const [tx, ty] = L(0.5, 0.3, 70);
-      s += `<text x="${tx}" y="${ty}" font-size="12" text-anchor="middle">☕</text>`;
+      // 自販機
+      let s = box(0.12, 0.1, 0.76, 0.55, 84, 0, th.vending);
+      const [ox, oy] = L(0.12, 0.65, 0);
+      const bottles = [];
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 4; i++) {
+        bottles.push(`<rect x="${3 + i * 4.8}" y="${-78 + r * 11}" width="3" height="8" rx="1.2" fill="${['#ff5e7e', '#4fb3ff', '#ffd23f', '#7ae582', '#ffffff', '#ff9f43'][(r * 4 + i) % 6]}"/>`);
+      }
+      s += `<g transform="matrix(1,0.5,0,1,${ox},${oy})">
+        <rect x="1.5" y="-81" width="21" height="36" rx="2" fill="#f4fbff"/>
+        ${bottles.join('')}
+        <rect x="3" y="-20" width="18" height="7" rx="1.5" fill="#2a2438"/>
+        <text x="12" y="-30" font-size="5.5" font-weight="800" text-anchor="middle" fill="#fff">DRINK</text>
+      </g>`;
       return s;
     }
     case 'plant': {
@@ -301,13 +297,31 @@ function furnitureSVG(f, key) {
       s += `<ellipse cx="${cx}" cy="${cy - 9}" rx="10" ry="14" fill="#6fd38d"/>`;
       return s;
     }
+    case 'hanawa': {
+      // 新装開店の花輪
+      const [cx, cy] = L(0.5, 0.5, 0);
+      let s = `<path d="M${cx - 10},${cy} L${cx},${cy - 60} L${cx + 10},${cy}" stroke="#9a7b56" stroke-width="2" fill="none"/>`;
+      const ring = ['#ff5e7e', '#ffd23f', '#ffffff', '#ff9fbf', '#4fb3ff', '#7ae582'];
+      for (let i = 0; i < 12; i++) {
+        const a = i / 12 * Math.PI * 2;
+        s += `<circle cx="${(cx + Math.cos(a) * 17).toFixed(1)}" cy="${(cy - 82 + Math.sin(a) * 17).toFixed(1)}" r="6" fill="${ring[i % ring.length]}"/>`;
+      }
+      s += `<circle cx="${cx}" cy="${cy - 82}" r="11" fill="#fff"/>`;
+      s += `<text x="${cx}" y="${cy - 78}" font-size="11" font-weight="800" text-anchor="middle" fill="#e8364f">祝</text>`;
+      s += `<rect x="${cx - 4}" y="${cy - 64}" width="8" height="30" fill="#fff" stroke="#e8364f" stroke-width="1"/>`;
+      s += `<text x="${cx}" y="${cy - 56}" font-size="6" font-weight="800" text-anchor="middle" fill="#e8364f" writing-mode="tb">新装開店</text>`;
+      return s;
+    }
     case 'outbox': {
+      // 景品カウンター（ここにドル箱を持っていくと提出完了）
       const c = th.accent;
-      let s = box(0.12, 0.15, 0.7, 0.66, 36, 0, shade(c, 0.25));
-      s += poly([[0.82, 0.3, 26], [0.82, 0.66, 26], [0.82, 0.66, 30], [0.82, 0.3, 30]], shade(c, -0.4));
-      const [tx, ty] = L(0.45, 0.48, 58);
-      s += `<rect x="${tx - 27}" y="${ty - 11}" width="54" height="16" rx="8" fill="#fff" stroke="${c}" stroke-width="1.5"/>`;
-      s += `<text x="${tx}" y="${ty + 1}" font-size="9" font-weight="800" text-anchor="middle" fill="${shade(c, -0.4)}">${DEPTS[key].boxLabel}</text>`;
+      let s = box(0.12, 0.05, 0.6, 0.9, 32, 0, '#f6e7c8');
+      s += box(0.1, 0.03, 0.66, 0.94, 4, 32, shade(c, 0.1));
+      s += box(0.25, 0.3, 0.2, 0.22, 10, 36, '#ff9f43');
+      s += box(0.3, 0.6, 0.16, 0.18, 14, 36, '#4fb3ff');
+      const [tx, ty] = L(0.45, 0.5, 70);
+      s += `<rect x="${tx - 32}" y="${ty - 11}" width="64" height="16" rx="8" fill="#fff" stroke="${c}" stroke-width="1.5"/>`;
+      s += `<text x="${tx}" y="${ty + 1}" font-size="9" font-weight="800" text-anchor="middle" fill="${shade(c, -0.35)}">${DEPTS[key].boxLabel}</text>`;
       return s;
     }
     case 'sofa': {
@@ -326,50 +340,51 @@ function furnitureSVG(f, key) {
 
 function roomSVG(key) {
   const dp = DEPTS[key], th = dp.theme;
-  let s = '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop id="sky1" offset="0" stop-color="#8fd3ff"/><stop id="sky2" offset="1" stop-color="#d8f1ff"/></linearGradient></defs>';
+  let s = '';
   const W = (list, fill, extra = '') => `<polygon points="${list.map(([x, y, z]) => P(x, y, z).join(',')).join(' ')}" fill="${fill}" ${extra}/>`;
   s += W([[0, 0, 0], [0, N, 0], [0, N, WALL], [0, 0, WALL]], th.wallL);
   s += W([[0, 0, 0], [N, 0, 0], [N, 0, WALL], [0, 0, WALL]], th.wallR);
   s += W([[0, 0, 0], [0, N, 0], [0, N, 9], [0, 0, 9]], th.base);
   s += W([[0, 0, 0], [N, 0, 0], [N, 0, 9], [0, 0, 9]], th.baseR);
-  s += W([[0, N, WALL], [0, 0, WALL], [-0.25, -0.25, WALL], [-0.25, N, WALL]], '#fffaf4');
-  s += W([[0, 0, WALL], [N, 0, WALL], [N, -0.25, WALL], [-0.25, -0.25, WALL]], '#fffaf4');
+  // 天井際の電飾ライン
+  s += W([[0, N, WALL - 6], [0, 0, WALL - 6], [0, 0, WALL - 2], [0, N, WALL - 2]], th.neon, 'class="neon"');
+  s += W([[0, 0, WALL - 6], [N, 0, WALL - 6], [N, 0, WALL - 2], [0, 0, WALL - 2]], th.neon, 'class="neon"');
+  s += W([[0, N, WALL], [0, 0, WALL], [-0.25, -0.25, WALL], [-0.25, N, WALL]], '#fff6fb');
+  s += W([[0, 0, WALL], [N, 0, WALL], [N, -0.25, WALL], [-0.25, -0.25, WALL]], '#fff6fb');
 
+  // 床：柄入りカーペット
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
     s += W([[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]].map(([a, b]) => [a, b, 0]), (x + y) % 2 ? th.floorB : th.floorA, `stroke="${th.floorLine}" stroke-width=".6"`);
+    s += W([[x + 0.5, y + 0.3], [x + 0.7, y + 0.5], [x + 0.5, y + 0.7], [x + 0.3, y + 0.5]].map(([a, b]) => [a, b, 0]), th.floorDot, 'opacity=".55"');
   }
-  s += W([[2.6, 7.4, 0], [7.6, 7.4, 0], [7.6, 9.5, 0], [2.6, 9.5, 0]], th.rug);
-  s += W([[2.85, 7.6, 0], [7.35, 7.6, 0], [7.35, 9.3, 0], [2.85, 9.3, 0]], 'none', 'stroke="#fff" stroke-width="2" stroke-dasharray="6 5"');
 
-  // 右の壁（y=0 平面）: (u,v) -> (u, 0.5u + v)
+  // 右の壁（y=0 平面）: ネオン看板・時計・大当たり王
   const [rx, ry] = P(0, 0, 0);
   s += `<g transform="matrix(1,0.5,0,1,${rx},${ry})">
-    <rect x="58" y="-142" width="80" height="58" rx="4" fill="url(#sky)" stroke="#fff" stroke-width="5"/>
-    <g id="stars" opacity="0"><circle cx="75" cy="-128" r="1.3" fill="#fff"/><circle cx="110" cy="-118" r="1" fill="#fff"/><circle cx="124" cy="-132" r="1.4" fill="#fff"/><circle cx="90" cy="-104" r="1" fill="#fff"/></g>
-    <circle id="sun" cx="118" cy="-126" r="7" fill="#fff3a6"/>
-    <path d="M98,-142 L98,-84 M58,-113 L138,-113" stroke="#fff" stroke-width="3"/>
-    <ellipse cx="74" cy="-96" rx="10" ry="4" fill="#fff" opacity=".85"/>
+    <rect x="44" y="-144" width="108" height="56" rx="8" fill="#1b1430" stroke="${th.neon}" stroke-width="3"/>
+    <text class="neon" x="98" y="-114" font-size="19" font-weight="800" text-anchor="middle" fill="#fff" stroke="${th.neon}" stroke-width=".8">パチンコ</text>
+    <text x="98" y="-97" font-size="9" font-weight="800" text-anchor="middle" fill="#ffe14d">${dp.hall}</text>
     <circle cx="218" cy="-112" r="15" fill="#fff" stroke="${th.baseR}" stroke-width="3"/>
-    <line id="hourHand" x1="218" y1="-112" x2="218" y2="-120" stroke="#5a4636" stroke-width="2.4" stroke-linecap="round"/>
+    <line id="hourHand" x1="218" y1="-112" x2="218" y2="-120" stroke="#3a3348" stroke-width="2.4" stroke-linecap="round"/>
     <line id="minHand" x1="218" y1="-112" x2="218" y2="-124" stroke="${th.accent}" stroke-width="1.6" stroke-linecap="round"/>
-    <rect x="258" y="-134" width="50" height="52" rx="3" fill="#fff" stroke="${th.base}" stroke-width="3"/>
-    <text x="283" y="-121" font-size="7" font-weight="800" text-anchor="middle" fill="${th.baseR}">${dp.mvpTitle}</text>
-    <text id="mvpName" x="283" y="-100" font-size="10" font-weight="800" text-anchor="middle" fill="${th.accent}">-</text>
+    <rect x="254" y="-134" width="58" height="52" rx="3" fill="#fff" stroke="#ffd23f" stroke-width="3"/>
+    <text x="283" y="-122" font-size="7" font-weight="800" text-anchor="middle" fill="#c99a12">${dp.mvpTitle}</text>
+    <text id="mvpName" x="283" y="-101" font-size="10" font-weight="800" text-anchor="middle" fill="${th.accent}">-</text>
     <text x="283" y="-89" font-size="9" text-anchor="middle">👑</text>
   </g>`;
 
-  // 左の壁（x=0 平面）: (u,v) -> (u, -0.5u + v)
+  // 左の壁（x=0 平面）: 新台ポスターと出玉ボード
   const [lx, ly] = P(0, N, 0);
   s += `<g transform="matrix(1,-0.5,0,1,${lx},${ly})">
-    <rect x="44" y="-128" width="66" height="56" rx="6" fill="#fff" stroke="${th.accent}" stroke-width="3"/>
-    <text x="77" y="-108" font-size="11" font-weight="800" text-anchor="middle" fill="${th.accent}">${dp.poster[0]}</text>
-    <text x="77" y="-90" font-size="16" text-anchor="middle">${dp.poster[1]}</text>
-    <rect x="190" y="-138" width="112" height="70" rx="5" fill="#ffffff" stroke="#b9c3d6" stroke-width="3"/>
-    <text x="246" y="-122" font-size="10" font-weight="800" text-anchor="middle" fill="#5f6caf">${dp.boardTitle}</text>
-    <text id="wbQueue" x="200" y="-104" font-size="10" fill="#4a3f55">待ち 0</text>
-    <text id="wbDoing" x="200" y="-90" font-size="10" fill="#4a3f55">作業中 0</text>
-    <text id="wbDone" x="200" y="-76" font-size="10" fill="#4a3f55">完了 0</text>
-    <path d="M262,-104 l8,-8 l8,5 l10,-12" stroke="#5fd39a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <rect x="44" y="-130" width="66" height="60" rx="6" fill="#fff" stroke="${th.accent}" stroke-width="3"/>
+    <text x="77" y="-110" font-size="12" font-weight="800" text-anchor="middle" fill="${th.accent}">${dp.poster[0]}</text>
+    <text x="77" y="-88" font-size="16" text-anchor="middle">${dp.poster[1]}</text>
+    <rect x="190" y="-138" width="112" height="70" rx="5" fill="#1b1430" stroke="#ffd23f" stroke-width="3"/>
+    <text x="246" y="-122" font-size="10" font-weight="800" text-anchor="middle" fill="#ffd23f">${dp.boardTitle}</text>
+    <text id="wbQueue" x="200" y="-104" font-size="10" fill="#ffffff">待ち 0</text>
+    <text id="wbDoing" x="200" y="-90" font-size="10" fill="#ffffff">稼働中 0</text>
+    <text id="wbDone" x="200" y="-76" font-size="10" fill="#ffffff">大当たり 0</text>
+    <text class="neon" x="282" y="-88" font-size="16" text-anchor="middle">🎰</text>
   </g>`;
   return s;
 }
@@ -400,7 +415,7 @@ function makeAgent(name, role, look, desk) {
   const [dx, dy] = DESKS[desk];
   return {
     id: state.nextId++, name, role, look, desk,
-    x: dx + 0.5, y: dy - 0.5, tile: [dx, dy - 1],
+    x: dx + 0.5, y: dy + 1.5, tile: [dx, dy + 1],
     path: [], sitting: null, state: 'idle', taskId: null,
     energy: rand(70, 100), xp: 0, level: 1, done: 0,
     wait: 0, idleT: rand(0.5, 2), bubble: null, flip: false, back: false,
@@ -456,7 +471,7 @@ function load() {
       const d = state.depts[k];
       d.agents.forEach((a) => {
         // 途中の移動は保存しないので、所属タイルに戻して再開
-        if (a.sitting === 'desk') { const [dx, dy] = DESKS[a.desk]; a.tile = [dx, dy - 1]; }
+        if (a.sitting === 'desk') { const [dx, dy] = DESKS[a.desk]; a.tile = [dx, dy + 1]; }
         a.x = a.tile[0] + 0.5; a.y = a.tile[1] + 0.5; a.sitting = null; a.path = [];
         a.state = 'idle'; a.wait = 0; a.after = null; a.onArrive = null; a.idleT = 0.5;
       });
@@ -520,11 +535,12 @@ function goTo(a, tile, onArrive, extraPoint) {
 function goDesk(a) {
   const [dx, dy] = DESKS[a.desk];
   a.state = 'toDesk';
-  goTo(a, [dx, dy - 1], () => {
-    a.sitting = 'desk'; a.state = 'work'; a.flip = true; a.back = false;
+  goTo(a, [dx, dy + 1], () => {
+    // 台に向かって座る（後ろ姿）
+    a.sitting = 'desk'; a.state = 'work'; a.flip = false; a.back = true;
     const t = taskById(a.taskId);
-    if (t) say(a, t.progress > 0 ? '続きやろっと' : pick(['よし、始めます！', '集中モード💪', 'がんばるぞ〜']));
-  }, [dx + 0.18, dy + 0.18]);
+    if (t) say(a, t.progress > 0 ? '続き打とっと🎰' : pick(['よし、打ちます！', 'この台くる気がする', '玉貸しポチッ']));
+  }, [dx + 0.5, dy + 1.22]);
 }
 
 function goCoffee(a) {
@@ -553,7 +569,7 @@ function goSofa(a) {
 function wander(a) {
   for (let i = 0; i < 12; i++) {
     const t = [Math.floor(rand(0, N)), Math.floor(rand(0, N))];
-    if (walkable(t[0], t[1]) && !occupied(a, t) && !DESKS.some(([x, y]) => x === t[0] && y - 1 === t[1])) {
+    if (walkable(t[0], t[1]) && !occupied(a, t) && !DESKS.some(([x, y]) => x === t[0] && y + 1 === t[1])) {
       a.state = 'walk';
       goTo(a, t, () => { a.state = 'idle'; a.idleT = rand(1, 3); if (Math.random() < 0.3) say(a, pick(IDLE_LINES)); });
       return;
@@ -618,14 +634,18 @@ function work(a, dt) {
   const rate = (t.type === a.role ? 1.6 : 1) * (1 + 0.08 * (a.level - 1)) * (a.energy > 15 ? 1 : 0.55);
   t.progress = Math.min(t.work, t.progress + dt * rate);
   a.energy = clamp(a.energy - dt * 1.15, 0, 100);
-  if (!a.bubble && Math.random() < dt * 0.1) say(a, pick(DEPTS[D.key].workLines[t.type]));
+  if (!a.bubble && Math.random() < dt * 0.1) say(a, Math.random() < 0.55 ? pick(PACHI_LINES) : pick(DEPTS[D.key].workLines[t.type]));
   if (t.progress >= t.work) return deliver(a, t);
   if (a.energy < 10) { say(a, 'ちょっと休憩…💦'); goCoffee(a); }
 }
 
+const PACHI_LINES = ['リーチ！', '保留4つ溜まった', '激アツ!?', '回ってる回ってる🌀', 'チャンス目きた', 'ハンドルひねり中…', '玉減ってきた…', '金保留！✨', '赤保留きた', 'ボタン押して！'];
+
 function deliver(a, t) {
+  // 作業完了＝大当たり。台が光ったあと、ドル箱を景品カウンターへ運ぶ
   a.state = 'deliver';
-  say(a, pick(['できた！', '完了〜✨', '提出しまーす']));
+  a.feverUntil = state.time + 4;
+  say(a, pick(['大当たり〜！🎉', '確変きた！！', '777！！🎰']));
   const spot = OUTBOX_SPOTS.find((s) => !occupied(a, s)) || OUTBOX_SPOTS[0];
   goTo(a, spot, () => {
     a.flip = true;
@@ -640,14 +660,14 @@ function complete(a, t) {
   a.taskId = null; a.done++;
   a.xp += t.work * 2;
   floatText(1, 4, '✅');
-  deptToast(`✅ ${a.name}が「${t.title}」を完了！`);
+  deptToast(`🎰 ${a.name}が「${t.title}」で大当たり！（完了）`);
   const need = a.level * 100;
   if (a.xp >= need) {
     a.xp -= need; a.level++;
     later(0.6, () => { say(a, `レベル${a.level}になった！🎉`, 3); floatText(a.x, a.y, 'LEVEL UP!'); });
     deptToast(`🎉 ${a.name}が Lv${a.level} にレベルアップ！`);
   } else {
-    say(a, pick(['ふぅ、おわり！', '次いこ〜', 'お役に立てたかな？']));
+    say(a, pick(['景品ゲット！🎁', '次の台いこ〜', '今日ツイてる！']));
   }
   a.state = 'idle'; a.idleT = 1;
   dirty = true;
@@ -765,6 +785,7 @@ function step(dt) {
 /* =========================================================
  *  描画
  * ========================================================= */
+const machineEls = [];
 function buildRoom() {
   els.forEach((el) => el.remove()); els.clear();
   $('#fx').innerHTML = '';
@@ -778,7 +799,9 @@ function buildRoom() {
     d.style.transform = `translate(${sx}px,${sy}px)`;
     d.style.zIndex = Math.round((f.x + f.y + ((f.w || 1) + (f.d || 1)) / 2) * 100);
     d.innerHTML = `<svg width="1" height="1">${furnitureSVG(f, D.key)}</svg>`;
-    if (f.kind === 'desk') d.dataset.desk = f.desk;
+    if (f.kind === 'machine') {
+      if (f.desk !== undefined) { d.dataset.desk = f.desk; machineEls[f.desk] = d; } else d.style.color = DEPTS[D.key].theme.neon;
+    }
     layer.appendChild(d);
   });
   document.documentElement.style.setProperty('--dept', DEPTS[D.key].theme.accent);
@@ -788,7 +811,7 @@ function buildRoom() {
 function syncDeskColors() {
   document.querySelectorAll('.furn[data-desk]').forEach((d) => {
     const owner = D.agents.find((a) => a.desk === +d.dataset.desk);
-    d.style.color = owner ? owner.look.accent === '#ffffff' ? owner.look.outfit : owner.look.accent : '#d5dae2';
+    d.style.color = owner ? owner.look.accent === '#ffffff' ? owner.look.outfit : owner.look.accent : DEPTS[D.key].theme.neon;
   });
 }
 
@@ -797,7 +820,7 @@ function agentEl(a) {
   if (!el) {
     el = document.createElement('div');
     el.className = 'agent';
-    el.innerHTML = '<div class="shadow"></div><div class="figure"></div><div class="nm"></div><div class="pbar"><i></i></div><div class="sel">▼</div>';
+    el.innerHTML = '<div class="shadow"></div><div class="figure"></div><div class="carry"><svg viewBox="0 0 24 16"><rect x="1" y="5" width="22" height="10" rx="1.5" fill="#3a3348"/><circle cx="5" cy="5" r="2.6" fill="#d9dde6"/><circle cx="10" cy="4" r="2.6" fill="#eef0f5"/><circle cx="15" cy="5" r="2.6" fill="#d9dde6"/><circle cx="19.5" cy="4.5" r="2.6" fill="#eef0f5"/><circle cx="7.5" cy="1.8" r="2.4" fill="#f5f6fa"/><circle cx="13" cy="1.6" r="2.4" fill="#d9dde6"/></svg></div><div class="nm"></div><div class="pbar"><i></i></div><div class="sel">▼</div>';
     el.addEventListener('click', (e) => { e.stopPropagation(); openAgent(a.id); });
     $('#entities').appendChild(el);
     els.set(a.id, el);
@@ -820,7 +843,8 @@ function renderAgents() {
     const cls = ['agent'];
     if (a.path.length) cls.push('walk');
     if (a.flip) cls.push('flip');
-    if (a.back && a.path.length) cls.push('back');
+    if ((a.back && a.path.length) || a.sitting === 'desk') cls.push('back');
+    if (a.state === 'deliver' && a.path.length) cls.push('carry');
     if (a.sitting) cls.push('sit-' + a.sitting);
     if (a.state === 'work' && a.sitting === 'desk') cls.push('work');
     if (a.id === selectedId) cls.push('selected');
@@ -833,6 +857,12 @@ function renderAgents() {
       if (!b) { b = document.createElement('div'); b.className = 'bubble'; el.appendChild(b); }
       if (b.textContent !== a.bubble.text) { b.textContent = a.bubble.text; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; }
     } else if (b) b.remove();
+
+    const m = machineEls[a.desk];
+    if (m) {
+      m.classList.toggle('playing', a.state === 'work' && a.sitting === 'desk');
+      m.classList.toggle('fever', (a.feverUntil || 0) > state.time);
+    }
 
     const t = a.state === 'work' ? taskById(a.taskId) : null;
     const pbar = el.querySelector('.pbar');
@@ -855,11 +885,6 @@ function renderRoomLive() {
   rot($('#hourHand'), (hh % 12) * 30 + mm * 0.5, 8);
   rot($('#minHand'), mm * 6, 12);
 
-  const night = hh >= 19 || hh < 6, dusk = hh >= 17 && hh < 19;
-  $('#sky1').setAttribute('stop-color', night ? '#1d2453' : dusk ? '#ff9a76' : '#8fd3ff');
-  $('#sky2').setAttribute('stop-color', night ? '#40397a' : dusk ? '#ffd7a8' : '#d8f1ff');
-  $('#stars').setAttribute('opacity', night ? 1 : 0);
-  $('#sun').setAttribute('fill', night ? '#fffbe0' : '#fff3a6');
 }
 
 let dirty = true;
@@ -871,8 +896,8 @@ function renderUI() {
 
   $('#doneCount').textContent = DEPT_KEYS.reduce((s, k) => s + state.depts[k].agents.reduce((x, a) => x + a.done, 0), 0);
   $('#wbQueue').textContent = `待ち ${queued.length}`;
-  $('#wbDoing').textContent = `作業中 ${doing.length}`;
-  $('#wbDone').textContent = `完了 ${totalDone}`;
+  $('#wbDoing').textContent = `稼働中 ${doing.length}`;
+  $('#wbDone').textContent = `大当たり ${totalDone}`;
   const mvp = D.agents.slice().sort((a, b) => b.done - a.done)[0];
   $('#mvpName').textContent = mvp && mvp.done ? mvp.name : '-';
 
@@ -931,9 +956,9 @@ function renderUI() {
 function statusText(a) {
   const t = taskById(a.taskId);
   switch (a.state) {
-    case 'work': return `💻 ${t ? t.title : '作業中'}`;
-    case 'toDesk': return '🚶 デスクへ';
-    case 'deliver': return '📦 提出中';
+    case 'work': return `🎰 ${t ? t.title : '打ってる'}`;
+    case 'toDesk': return '🚶 台へ';
+    case 'deliver': return '🎉 景品交換へ';
     case 'coffee': return '☕ コーヒー休憩';
     case 'sofa': return '🛋️ ひと休み';
     case 'chat': return '💬 おしゃべり';
