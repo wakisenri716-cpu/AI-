@@ -943,8 +943,17 @@ function bindUI() {
     closeModals(); dirty = true; save();
   });
 
+  let resetArmed = null;
   $('#resetBtn').addEventListener('click', () => {
-    if (!confirm('オフィスを最初からやり直しますか？')) return;
+    // ブラウザの confirm() を使わず、2回押しで確定する
+    const btn = $('#resetBtn');
+    if (!resetArmed) {
+      btn.textContent = 'もう一度押すとリセット';
+      resetArmed = setTimeout(() => { resetArmed = null; btn.textContent = '↺'; }, 3000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = null; btn.textContent = '↺';
+    toast('🧹 オフィスを最初からやり直しました');
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
     els.forEach((el) => el.remove()); els.clear(); timers.length = 0;
     newGame(); dirty = true;
