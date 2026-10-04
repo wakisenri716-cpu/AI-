@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIエージェント オフィス</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">🏢 <span>AIエージェント オフィス</span></div>
+  <div class="stats">
+    <span class="pill" id="clock">Day 1 09:00</span>
+    <span class="pill coin">🪙 <b id="coins">0</b></span>
+    <span class="pill">✅ <b id="doneCount">0</b></span>
+  </div>
+  <div class="controls">
+    <div class="speed" role="group" aria-label="ゲーム速度">
+      <button data-speed="0" title="一時停止">⏸</button>
+      <button data-speed="1" class="on">▶</button>
+      <button data-speed="2">▶▶</button>
+      <button data-speed="4">⏩</button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="autoTask" checked> 自動でタスク発生</label>
+    <button class="btn primary" id="hireBtn">＋ 採用</button>
+    <button class="btn ghost" id="resetBtn" title="最初からやり直す">↺</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="viewport" id="viewport">
+    <div class="stage" id="stage">
+      <svg class="room" id="room" width="700" height="520"></svg>
+      <div class="entities" id="entities"></div>
+      <div class="fx" id="fx"></div>
+    </div>
+    <p class="hint">キャラをタップするとプロフィールと着せかえが開きます</p>
+  </section>
+
+  <aside class="side">
+    <div class="card">
+      <h2>👥 エージェント</h2>
+      <div class="roster" id="roster"></div>
+    </div>
+
+    <div class="card">
+      <h2>📝 タスクを依頼</h2>
+      <form id="taskForm" class="form">
+        <div class="row">
+          <input id="taskTitle" placeholder="例：競合サービスを調査して" maxlength="40" required>
+          <button type="button" class="btn small" id="diceBtn" title="ランダムなお題">🎲</button>
+        </div>
+        <div class="row">
+          <select id="taskType"></select>
+          <select id="taskDiff">
+            <option value="easy">かんたん ★</option>
+            <option value="normal" selected>ふつう ★★</option>
+            <option value="hard">むずかしい ★★★</option>
+          </select>
+        </div>
+        <div class="row">
+          <select id="taskAssignee"></select>
+          <button class="btn primary" type="submit">依頼する</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>⚙️ 作業中</h2>
+      <ul class="list" id="doingList"></ul>
+    </div>
+
+    <div class="card">
+      <h2>📥 待ちタスク <small id="queueCount"></small></h2>
+      <ul class="list" id="queueList"></ul>
+    </div>
+
+    <div class="card">
+      <h2>🏆 完了ログ</h2>
+      <ul class="list" id="doneList"></ul>
+    </div>
+  </aside>
+</main>
+
+<div class="modal" id="agentModal" hidden>
+  <div class="sheet">
+    <button class="close" data-close>✕</button>
+    <div class="profile">
+      <div class="preview" id="agentPreview"></div>
+      <div class="info">
+        <input class="name-input" id="agentName" maxlength="8">
+        <div class="row">
+          <label>役割</label>
+          <select id="agentRole"></select>
+        </div>
+        <div class="meter"><span>Lv <b id="agentLv"></b></span><div class="bar"><i id="agentXp"></i></div></div>
+        <div class="meter"><span>元気</span><div class="bar energy"><i id="agentEnergy"></i></div></div>
+        <p class="status" id="agentStatus"></p>
+        <p class="sub" id="agentDone"></p>
+      </div>
+    </div>
+    <h3>着せかえ</h3>
+    <div class="custom" id="customizer"></div>
+  </div>
+</div>
+
+<div class="modal" id="hireModal" hidden>
+  <div class="sheet narrow">
+    <button class="close" data-close>✕</button>
+    <h3>新しいエージェントを採用</h3>
+    <div class="candidate">
+      <div class="preview" id="hirePreview"></div>
+      <div>
+        <p class="cand-name" id="hireName"></p>
+        <p class="sub" id="hireRole"></p>
+        <p class="sub">得意なタスクは 1.6倍速で進めます</p>
+      </div>
+    </div>
+    <div class="row end">
+      <button class="btn" id="rerollBtn">🎲 別の候補</button>
+      <button class="btn primary" id="confirmHire"></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="resultModal" hidden>
+  <div class="sheet narrow">
+    <button class="close" data-close>✕</button>
+    <h3 id="resultTitle"></h3>
+    <p class="sub" id="resultMeta"></p>
+    <pre class="result" id="resultBody"></pre>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="game.js"></script>
+</body>
+</html>
