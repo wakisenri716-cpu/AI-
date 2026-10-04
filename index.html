@@ -43,6 +43,16 @@
   </div>
 
   <aside class="side">
+    <div class="card cmd">
+      <h2>💬 文で指示する</h2>
+      <form id="cmdForm" class="cmd-form">
+        <textarea id="cmdInput" rows="2" maxlength="200" placeholder="例：ハルにC社へアポ電して。あと、事務部で請求書の発行を急ぎでお願い"></textarea>
+        <button class="btn primary" type="submit">指示する</button>
+      </form>
+      <div class="examples" id="cmdExamples"></div>
+      <ul class="cmd-log" id="cmdLog"></ul>
+    </div>
+
     <div class="card">
       <h2>👥 <span data-deptname>営業部</span>のエージェント</h2>
       <div class="roster" id="roster"></div>
@@ -93,7 +103,9 @@
     <div class="profile">
       <div class="preview" id="agentPreview"></div>
       <div class="info">
-        <input class="name-input" id="agentName" maxlength="8">
+        <label class="name-label" for="agentName">✏️ 名前（タップして変更）</label>
+        <input class="name-input" id="agentName" maxlength="8" autocomplete="off">
+        <p class="err" id="agentNameErr"></p>
         <div class="row">
           <label>役割</label>
           <select id="agentRole"></select>
@@ -116,7 +128,9 @@
     <div class="candidate">
       <div class="preview" id="hirePreview"></div>
       <div>
-        <p class="cand-name" id="hireName"></p>
+        <label class="name-label" for="hireNameInput">✏️ 名前を決める</label>
+        <input class="name-input" id="hireNameInput" maxlength="8" autocomplete="off">
+        <p class="err" id="hireErr"></p>
         <p class="sub" id="hireRole"></p>
         <p class="sub">得意な種類のタスクは 1.6倍速で進めます</p>
       </div>

@@ -581,7 +581,8 @@ function startChat(a) {
 }
 
 function pickTask(a) {
-  const queued = D.tasks.filter((t) => t.status === 'queued');
+  // 急ぎのタスクを先に拾う
+  const queued = D.tasks.filter((t) => t.status === 'queued').sort((x, y) => (y.urgent ? 1 : 0) - (x.urgent ? 1 : 0));
   return queued.find((t) => t.assignee === a.id)
     || queued.find((t) => !t.assignee && t.type === a.role)
     || queued.find((t) => !t.assignee && !D.agents.some((o) => o !== a && o.role === t.type && o.state === 'idle' && !o.taskId))
@@ -723,6 +724,12 @@ function updateAgent(a, dt) {
     return;
   }
 
+  // 文で「休憩して」と言われていたら、作業の区切りで向かう
+  if (a.pending && (a.state === 'work' || a.state === 'idle')) {
+    const kind = a.pending; a.pending = null;
+    say(a, kind === 'sofa' ? 'はーい、ひと休みします' : 'コーヒー行ってきます☕');
+    return kind === 'sofa' ? goSofa(a) : goCoffee(a);
+  }
   if (a.state === 'work') return work(a, dt);
   if (a.state === 'idle') return think(a, dt);
   // 想定外の状態からは idle に復帰
@@ -751,7 +758,7 @@ function step(dt) {
   D.agents.forEach((a) => updateAgent(a, dt));
   autoTasks(dt);
   // 完了ログは最新 40 件だけ残す
-  const done = D.tasks.filter((t) => t.status === 'done');
+  const done = D.tasks.filter((t) => t.status === 'done').sort((x, y) => x.doneAt - y.doneAt);
   if (done.length > 40) { const drop = new Set(done.slice(0, done.length - 40).map((t) => t.id)); D.tasks = D.tasks.filter((t) => !drop.has(t.id)); }
 }
 
@@ -859,7 +866,7 @@ let dirty = true;
 function renderUI() {
   const queued = D.tasks.filter((t) => t.status === 'queued');
   const doing = D.tasks.filter((t) => t.status === 'doing');
-  const done = D.tasks.filter((t) => t.status === 'done');
+  const done = D.tasks.filter((t) => t.status === 'done').sort((x, y) => x.doneAt - y.doneAt);
   const totalDone = D.agents.reduce((s, a) => s + a.done, 0);
 
   $('#doneCount').textContent = DEPT_KEYS.reduce((s, k) => s + state.depts[k].agents.reduce((x, a) => x + a.done, 0), 0);
@@ -901,7 +908,7 @@ function renderUI() {
   $('#queueCount').textContent = queued.length ? `(${queued.length})` : '';
   $('#queueList').innerHTML = queued.length ? queued.map((t) => {
     const who = t.assignee ? agentById(t.assignee) : null;
-    return `<li><span>${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${DIFF[t.diff].label}${who ? ' → ' + esc(who.name) : ''}</span><button class="x" data-del="${t.id}" title="取り消す">✕</button></li>`;
+    return `<li><span>${roles()[t.type].icon}</span><span class="t">${t.urgent ? '🔥' : ''}${esc(t.title)}</span><span class="meta">${DIFF[t.diff].label}${who ? ' → ' + esc(who.name) : ''}</span><button class="x" data-del="${t.id}" title="取り消す">✕</button></li>`;
   }).join('') : '<li class="empty">依頼待ちのタスクはありません</li>';
 
   $('#doneList').innerHTML = done.length ? done.slice().reverse().map((t) =>
@@ -956,6 +963,7 @@ function closeModals() {
 
 function openAgent(id) {
   selectedId = id;
+  $('#agentNameErr').textContent = '';
   renderAgentModal();
   openModal('#agentModal');
 }
@@ -990,16 +998,215 @@ function renderAgentModal() {
 
 let candidate = null;
 function rollCandidate() {
-  const used = new Set(DEPT_KEYS.flatMap((k) => state.depts[k].agents.map((a) => a.name)));
-  const name = pick(NAMES.filter((n) => !used.has(n))) || 'エージェント';
-  candidate = { name, role: pick(Object.keys(roles())), look: randomLook() };
+  candidate = { role: pick(Object.keys(roles())), look: randomLook() };
   $('#hirePreview').innerHTML = charSVG(candidate.look);
-  $('#hireName').textContent = candidate.name;
+  // 自分で入力した名前は「別の候補」を押しても残す
+  if (!$('#hireNameInput').dataset.typed) $('#hireNameInput').value = unusedName();
+  $('#hireErr').textContent = '';
   $('#hireRole').textContent = `${DEPTS[D.key].icon} ${DEPTS[D.key].name} ・ ${roles()[candidate.role].icon} ${roles()[candidate.role].label}`;
   const freeDesk = DESKS.findIndex((_, i) => !D.agents.some((a) => a.desk === i));
   const btn = $('#confirmHire');
   btn.disabled = freeDesk < 0;
   btn.textContent = freeDesk < 0 ? 'デスクが満席です' : `${DEPTS[D.key].name}に採用する`;
+}
+
+/* =========================================================
+ *  名前のルール
+ * ========================================================= */
+const allAgents = () => DEPT_KEYS.flatMap((k) => state.depts[k].agents.map((a) => ({ a, dept: k })));
+
+function nameError(name, self = null) {
+  if (!name) return '名前を入力してください';
+  if (name.length > 8) return '名前は8文字以内にしてください';
+  if (/[\s、。,.!！?？「」]/.test(name)) return '名前に空白や記号は使えません';
+  const dup = allAgents().find(({ a }) => a !== self && a.name === name);
+  if (dup) return `「${name}」は${DEPTS[dup.dept].name}にすでにいます`;
+  return null;
+}
+
+function unusedName() {
+  const used = new Set(allAgents().map(({ a }) => a.name));
+  return pick(NAMES.filter((n) => !used.has(n))) || `エージェント${state.nextId}`;
+}
+
+/* 指定した部署にエージェントを採用する（ボタンからも文からも使う） */
+function hireAgent(deptKey, name, role, look) {
+  const d = state.depts[deptKey];
+  const freeDesk = DESKS.findIndex((_, i) => !d.agents.some((a) => a.desk === i));
+  if (freeDesk < 0) return null;
+  const a = makeAgent(name, role, look, freeDesk);
+  a.x = 1.5; a.y = 4.5; a.tile = [1, 4]; a.energy = 100;
+  d.agents.push(a);
+  a.bubble = { text: 'よろしくお願いします！🙇', until: state.time + 3 };
+  dirty = true;
+  return a;
+}
+
+/* =========================================================
+ *  文での指示
+ *  例）「ハルにC社へアポ電して」「事務部で請求書の発行を急ぎでお願い」
+ *      「ミクの名前をミクリンに変えて」「営業部にサクラって子を採用して」
+ *      「みんなコーヒー休憩して」
+ *  ルールベースで「誰に・どの部署で・何を・どのくらい」を読み取る。
+ * ========================================================= */
+const TYPE_WORDS = {
+  inside: ['テレアポ', 'アポ', '架電', '電話', '問い合わせ', '問合せ', 'リード', 'リスト', 'コール'],
+  proposal: ['提案書', '提案', '見積', '資料', 'スライド', 'RFP', '企画書'],
+  field: ['商談', '訪問', 'クロージング', 'プレゼン', '打ち合わせ', '打合せ', '受注', '営業に行'],
+  cs: ['フォロー', '既存', '解約', 'アップセル', 'ヒアリング', 'アンケート', 'サポート', '定例'],
+  account: ['請求', '経費', '仕訳', '入金', '支払', '経理', '精算', '領収書', '予算', '決算', '税'],
+  general: ['備品', '発注', '会議室', 'イベント', '名刺', '総務', '掃除', '点検', '手配', '郵便'],
+  hr: ['勤怠', '入社', '給与', '求人', '人事', '有給', '年末調整', '面接', '研修', '採用'],
+  legal: ['契約', 'NDA', '規約', '規程', '法務', '押印', '法律', 'コンプラ', '特許'],
+};
+const ROLE_DEPT = {};
+DEPT_KEYS.forEach((k) => Object.keys(DEPTS[k].roles).forEach((r) => { ROLE_DEPT[r] = k; }));
+
+const HONORIFIC = '(?:さん|くん|君|ちゃん|氏)?';
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// 「アイデア」の中の「アイ」のような誤爆を避けるため、名前の直後にカタカナが続くときは一致とみなさない
+function findAgentIn(text) {
+  return allAgents().sort((x, y) => y.a.name.length - x.a.name.length)
+    .find(({ a }) => new RegExp(reEsc(a.name) + '(?![ァ-ヶー])').test(text)) || null;
+}
+
+function deptIn(text) {
+  if (/営業部|営業の(人|みんな|誰か)|営業チーム/.test(text)) return 'sales';
+  if (/事務部|事務の(人|みんな|誰か)|事務チーム|事務方/.test(text)) return 'admin';
+  return null;
+}
+
+function scoreTypes(text, onlyDept) {
+  let best = null, bestScore = 0;
+  Object.entries(TYPE_WORDS).forEach(([type, words]) => {
+    if (onlyDept && ROLE_DEPT[type] !== onlyDept) return;
+    const score = words.reduce((s, w) => s + (text.includes(w) ? w.length : 0), 0);
+    if (score > bestScore) { best = type; bestScore = score; }
+  });
+  return best;
+}
+
+const U_ROW = { か: 'く', が: 'ぐ', さ: 'す', た: 'つ', な: 'ぬ', ば: 'ぶ', ま: 'む', ら: 'る', わ: 'う' };
+const TAIL = ['してもらえますか', 'してもらえる', 'してくれる', 'してください', 'して下さい', 'しておいて', 'しといて', 'してほしい', 'して欲しい',
+  'お願いします', 'お願いね', 'お願い', 'よろしくね', 'よろしく', '頼みます', '頼んだ', '頼む', 'やっておいて', 'やっといて', 'やって',
+  'つくって', '作って', '書いて', 'まとめて', '進めて', '考えて', '調べて', '送って', '出して', '直して', '片付けて', '用意して', '済ませて', '終わらせて',
+  'ください', '下さい', 'して', 'する', 'おいて', 'ね', 'よ', 'を', 'に', 'は', 'で', 'が', 'の', 'も', '、', ',', ' ', '　'];
+
+function cleanTitle(text, agentName) {
+  let t = text;
+  if (agentName) t = t.replace(new RegExp(reEsc(agentName) + HONORIFIC + '(?:に|へ|は|が|で|、|,)?'), '');
+  t = t.replace(/(営業部|事務部|営業チーム|事務チーム)(?:の(?:人|みんな|誰か))?(?:で|に|へ|は|から|、)?/g, '');
+  t = t.replace(/^(営業|事務)の(人|みんな|誰か)(に|へ|で|は)?/, '');
+  t = t.replace(/(大至急|至急|急ぎで|急いで|急ぎ|最優先で|最優先|なるはやで|なるはや|すぐに|サクッと|さくっと|軽く|簡単に|簡単な|じっくり|しっかり|丁寧に|ちゃんと)/g, '');
+  t = t.replace(/させ(て|る)/g, 'する').replace(/([かがさたなばまらわ])せ(て|る)$/, (_, k) => U_ROW[k]);
+  t = t.replace(/[。！!？?]+$/, '').trim();
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const s of TAIL) {
+      if (t.length > s.length && t.endsWith(s)) { t = t.slice(0, -s.length).trim(); changed = true; break; }
+    }
+  }
+  return t.slice(0, 30);
+}
+
+function interpret(raw) {
+  const s = raw.trim().replace(/^(あとは|あと|それと|それから|次に|ついでに)[、,]?\s*/, '');
+  if (!s) return null;
+  const hit = findAgentIn(s);
+
+  // 1) 名前の変更：「ハルの名前をタロウに変えて」「ハルをタロウに改名」
+  const rn = s.match(/^(.+?)の名前を[「『]?(.+?)[」』]?(?:に|へ)(?:変えて|変更|して|改名|する)/) || s.match(/^(.+?)を[「『]?(.+?)[」』]?(?:に改名|って呼んで|と呼んで)/);
+  if (rn) {
+    const who = findAgentIn(rn[1]);
+    if (!who) return { ok: false, text: `「${rn[1]}」という名前のエージェントが見つかりません` };
+    const newName = rn[2].trim();
+    const err = nameError(newName, who.a);
+    if (err) return { ok: false, text: err };
+    const old = who.a.name;
+    who.a.name = newName;
+    state.depts[who.dept].tasks.forEach((t) => { if (t.agentName === old) t.agentName = newName; });
+    who.a.bubble = { text: `今日から「${newName}」です！`, until: state.time + 3 };
+    dirty = true;
+    return { ok: true, dept: who.dept, text: `${old} の名前を「${newName}」に変更しました` };
+  }
+
+  // 2) 採用：「営業部にサクラって子を採用して」「事務部に新しい人を入れて」
+  if (/(採用|雇って|雇う|雇い|入れて|増やして|仲間に)/.test(s) && /(新しい|人|子|メンバー|エージェント|って|という|っていう|「)/.test(s) && !hit) {
+    const named = s.match(/[「『](.+?)[」』]/) || s.match(/([^\s、。,をにはがで「」]+?)(?:って|という|と言う|っていう)(?:名前|子|人|メンバー|エージェント|やつ)/);
+    const dept = deptIn(s) || scoreTypes(s.replace(/採用/g, '')) && ROLE_DEPT[scoreTypes(s.replace(/採用/g, ''))] || state.view;
+    const role = scoreTypes(s.replace(/採用/g, ''), dept) || pick(Object.keys(DEPTS[dept].roles));
+    let name = named ? named[1].trim() : unusedName();
+    let note = '';
+    const err = nameError(name);
+    if (err) { note = `（${err}ので「${(name = unusedName())}」にしました）`; }
+    const a = hireAgent(dept, name, role, randomLook());
+    if (!a) return { ok: false, text: `${DEPTS[dept].name}のデスクが満席で採用できません` };
+    return { ok: true, dept, text: `${DEPTS[dept].name}に「${a.name}」（${DEPTS[dept].roles[role].label}）を採用しました${note}` };
+  }
+
+  // 3) 休憩：「ハル休憩して」「みんなコーヒー休憩して」「ミクはソファで休んで」
+  const typeAny = scoreTypes(s);
+  if (/(休憩|休んで|休ませ|ひと休み|一休み|コーヒー|ソファ|ごろごろ|ひと息|一息)/.test(s) && !typeAny) {
+    const everyone = /(みんな|全員|皆|みなさん)/.test(s);
+    const dept = deptIn(s) || (hit ? hit.dept : state.view);
+    const targets = everyone ? state.depts[dept].agents : hit ? [hit.a] : [];
+    if (!targets.length) return { ok: false, text: '誰に休憩してもらうか、名前か「みんな」を入れてください' };
+    const kind = /(ソファ|ごろごろ|横に)/.test(s) ? 'sofa' : 'coffee';
+    targets.forEach((a) => { a.pending = kind; });
+    const who = everyone ? `${DEPTS[dept].name}のみんな` : targets[0].name;
+    return { ok: true, dept, text: `${who}に${kind === 'sofa' ? 'ソファでひと休み' : 'コーヒー休憩'}してもらいます` };
+  }
+
+  // 4) タスクの依頼
+  const dept = hit ? hit.dept : deptIn(s) || (typeAny ? ROLE_DEPT[typeAny] : state.view);
+  const type = scoreTypes(s, dept) || (hit ? hit.a.role : Object.keys(DEPTS[dept].roles)[0]);
+  const diff = /(簡単|軽く|サクッと|さくっと|ちょっとした|すぐ終わる)/.test(s) ? 'easy'
+    : /(じっくり|しっかり|丁寧|難しい|大型|大きな|重め|徹底)/.test(s) ? 'hard' : 'normal';
+  const urgent = /(急ぎ|急いで|至急|最優先|なるはや|すぐに)/.test(s);
+  let title = cleanTitle(s, hit && hit.a.name);
+  if (title.length < 2) title = pick(DEPTS[dept].ideas[type]);
+  const t = makeTask(title, type, diff, hit ? hit.a.id : null);
+  t.urgent = urgent;
+  state.depts[dept].tasks.push(t);
+  dirty = true;
+  const r = DEPTS[dept].roles[type];
+  return {
+    ok: true, dept,
+    text: `${DEPTS[dept].name}${hit ? `の${hit.a.name}` : ''}に「${title}」を依頼しました（${r.icon}${r.task}・${DIFF[diff].label}${urgent ? '・🔥急ぎ' : ''}）`,
+  };
+}
+
+const cmdLog = [];
+function runCommand(raw) {
+  // 「。」や改行、「あと」「それと」で区切って複数の指示をまとめて受け付ける
+  const parts = raw.split(/[。！!？?\n]+|、\s*(?:あと|それと|それから|次に)、?/).map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return;
+  const results = parts.map((p) => ({ input: p, ...(interpret(p) || { ok: false, text: '指示が空です' }) }));
+  results.forEach((r) => cmdLog.unshift(r));
+  cmdLog.length = Math.min(cmdLog.length, 8);
+  const lastDept = results.filter((r) => r.ok && r.dept).map((r) => r.dept).pop();
+  if (lastDept) switchDept(lastDept);
+  renderCmdLog();
+  save();
+}
+
+function renderCmdLog() {
+  $('#cmdLog').innerHTML = cmdLog.map((r) => `
+    <li class="${r.ok ? 'ok' : 'ng'}"><span class="q">🗣 ${esc(r.input)}</span><span class="a">${r.ok ? '→' : '⚠'} ${esc(r.text)}</span></li>`).join('');
+}
+
+function renderCmdExamples() {
+  const s = state.depts.sales.agents[0], a = state.depts.admin.agents[0];
+  const ex = [
+    s ? `${s.name}にC社へアポ電して` : '営業部でC社へアポ電して',
+    '事務部で請求書の発行を急ぎでお願い',
+    a ? `${a.name}は契約書のチェックをじっくりやって` : '契約書のチェックをじっくりやって',
+    '営業部にサクラって子を採用して',
+    s ? `${s.name}の名前を${unusedName()}に変えて` : `ハルの名前を${unusedName()}に変えて`,
+    'みんなコーヒー休憩して',
+  ];
+  $('#cmdExamples').innerHTML = ex.map((e) => `<button type="button" class="ex">${esc(e)}</button>`).join('');
 }
 
 /* =========================================================
@@ -1065,27 +1272,57 @@ function bindUI() {
     a.look = { ...a.look, [b.dataset.look]: b.dataset.val };
     renderAgentModal(); dirty = true; save();
   });
-  $('#agentName').addEventListener('input', (e) => {
+  // 名前は確定（Enter / フォーカスが外れた）時に重複チェックして反映
+  $('#agentName').addEventListener('change', (e) => {
     const a = agentById(selectedId);
-    if (a) { a.name = e.target.value.trim() || a.name; dirty = true; }
+    if (!a) return;
+    const name = e.target.value.trim();
+    const err = nameError(name, a);
+    $('#agentNameErr').textContent = err || '';
+    if (err) { e.target.value = a.name; return; }
+    if (name !== a.name) {
+      D.tasks.forEach((t) => { if (t.agentName === a.name) t.agentName = name; });
+      a.name = name; say(a, `今日から「${name}」です！`);
+      toast(`✏️ 名前を「${name}」に変更しました`);
+      dirty = true; save(); renderCmdExamples();
+    }
   });
+  $('#agentName').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) e.target.blur(); });
   $('#agentRole').addEventListener('change', (e) => {
     const a = agentById(selectedId);
     if (a) { a.role = e.target.value; dirty = true; renderAgentModal(); }
   });
 
-  $('#hireBtn').addEventListener('click', () => { rollCandidate(); openModal('#hireModal'); });
+  $('#hireBtn').addEventListener('click', () => { delete $('#hireNameInput').dataset.typed; rollCandidate(); openModal('#hireModal'); });
   $('#rerollBtn').addEventListener('click', rollCandidate);
+  $('#hireNameInput').addEventListener('input', (e) => { e.target.dataset.typed = '1'; $('#hireErr').textContent = ''; });
   $('#confirmHire').addEventListener('click', () => {
-    const freeDesk = DESKS.findIndex((_, i) => !D.agents.some((a) => a.desk === i));
-    if (freeDesk < 0 || !candidate) return;
-    const a = makeAgent(candidate.name, candidate.role, candidate.look, freeDesk);
-    a.x = 1.5; a.y = 4.5; a.tile = [1, 4]; a.energy = 100;
-    D.agents.push(a);
-    say(a, 'よろしくお願いします！🙇');
+    if (!candidate) return;
+    const name = $('#hireNameInput').value.trim();
+    const err = nameError(name);
+    if (err) { $('#hireErr').textContent = err; $('#hireNameInput').focus(); return; }
+    const a = hireAgent(D.key, name, candidate.role, candidate.look);
+    if (!a) return;
     toast(`🎊 ${a.name}が${DEPTS[D.key].name}に加わりました！`);
-    closeModals(); dirty = true; save();
+    closeModals(); save(); renderCmdExamples();
   });
+
+  $('#cmdForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = $('#cmdInput').value;
+    if (!v.trim()) return;
+    runCommand(v);
+    $('#cmdInput').value = '';
+    renderCmdExamples();
+  });
+  $('#cmdInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#cmdForm').requestSubmit(); }
+  });
+  $('#cmdExamples').addEventListener('click', (e) => {
+    const b = e.target.closest('.ex');
+    if (b) { $('#cmdInput').value = b.textContent; $('#cmdInput').focus(); }
+  });
+  renderCmdExamples();
 
   let resetArmed = null;
   $('#resetBtn').addEventListener('click', () => {
@@ -1101,7 +1338,7 @@ function bindUI() {
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
     timers.length = 0;
     closeModals();
-    newGame(); buildRoom();
+    newGame(); buildRoom(); cmdLog.length = 0; renderCmdLog(); renderCmdExamples();
     $('#autoTask').checked = state.autoTask;
   });
 

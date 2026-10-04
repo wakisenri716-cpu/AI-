@@ -191,6 +191,30 @@ button, input, select { font: inherit; color: inherit; }
 .tab.on b { color: var(--c); }
 .chip .role { color: var(--ink); font-weight: 700; }
 
+/* ---------- 文で指示 ---------- */
+.cmd { border-color: #ffc7dc; }
+.cmd-form { display: flex; flex-direction: column; gap: 8px; }
+.cmd-form textarea {
+  width: 100%; resize: vertical; min-height: 56px; border: 2px solid var(--line); border-radius: 12px;
+  padding: 8px 10px; background: #fffafc; line-height: 1.5;
+}
+.cmd-form textarea:focus { outline: none; border-color: var(--pink); }
+.cmd-form .btn { align-self: flex-end; }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ex {
+  border: 1.5px dashed #f2bcd2; background: #fff; border-radius: 999px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer; color: var(--sub); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ex:hover { border-style: solid; color: var(--ink); }
+.cmd-log { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+.cmd-log:empty { display: none; }
+.cmd-log li { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding: 6px 8px; border-radius: 10px; background: #f3fbf6; border: 1.5px solid #cdeedd; }
+.cmd-log li.ng { background: #fff6f0; border-color: #ffd7bf; }
+.cmd-log .q { color: var(--sub); }
+.cmd-log .a { font-weight: 700; }
+.name-label { font-size: 12px; color: var(--sub); }
+.err { margin: 0; min-height: 1em; font-size: 12px; color: #d6455d; }
+
 /* ---------- side panel ---------- */
 .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .card {
@@ -266,7 +290,8 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 20px; font-weight: 800; border: 0; border-bottom: 2px dashed var(--line);
   padding: 2px 0; background: transparent; width: 100%;
 }
-.name-input:focus { outline: none; border-color: var(--pink); }
+.name-input:focus { outline: none; border-color: var(--pink); background: #fff5fa; }
+#hireNameInput { font-size: 22px; }
 .meter { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .meter span { width: 46px; }
 .meter .bar { flex: 1; height: 10px; background: #f3e6ee; border-radius: 99px; overflow: hidden; }
