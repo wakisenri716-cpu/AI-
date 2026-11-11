@@ -1072,6 +1072,9 @@ function switchDept(key) {
 function openModal(id) { $(id).hidden = false; }
 function closeModals() {
   document.querySelectorAll('.modal').forEach((m) => { m.hidden = true; });
+  // 書きかけの成果物は止める（書けた分は保存される）
+  writeCtl?.abort();
+  resultTask = null;
   selectedId = null;
 }
 
@@ -1291,23 +1294,280 @@ function interpret(raw) {
   };
 }
 
+/* =========================================================
+ *  Claude 連携（claude.ai の公開ページ内でだけ動く）
+ *  - 文での指示を Claude が解釈してゲーム操作に変換
+ *  - 完了ログを開くと、Claude がその成果物を実際に書く
+ *  Claude が使えない環境ではルールベースの解釈と定型文の成果物に戻る
+ * ========================================================= */
+let ai = null;          // sample 関数。null なら未接続
+let aiNote = '接続を確認中…';
+const AI_OFF = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired']);
+
+function initClaude() {
+  if (!window.claude || typeof window.claude.use !== 'function') { aiNote = 'Claude未接続（ルールで解釈）'; renderAiStatus(); return; }
+  window.claude.use('sample').then((s) => {
+    ai = s || null;
+    aiNote = ai ? 'Claudeが解釈します' : 'Claude未接続（ルールで解釈）';
+    renderAiStatus();
+  }).catch(() => { aiNote = 'Claude未接続（ルールで解釈）'; renderAiStatus(); });
+}
+
+function renderAiStatus() {
+  const el = $('#aiStatus');
+  if (!el) return;
+  el.textContent = aiNote;
+  el.classList.toggle('on', !!ai);
+}
+
+// 解釈中・拒否などで Claude が使えなくなったら、この表示中はルールに切り替える
+function aiFailed(e) {
+  const code = e && e.code;
+  if (AI_OFF.has(code)) {
+    ai = null;
+    aiNote = code === 'not_granted' ? 'Claudeの利用が許可されていません（ルールで解釈）' : 'Claudeを使えません（ルールで解釈）';
+    renderAiStatus();
+  }
+  return {
+    rate_limited: 'Claudeの利用上限に達しました。少し待ってから試してください',
+    refused: 'Claudeがこの指示への回答を控えました',
+    invalid_json: 'Claudeの返答を読み取れませんでした',
+    session_expired: 'claude.ai に再ログインしてください',
+  }[code] || null;
+}
+
+/* ---------- 操作の実行（ルール解釈と Claude 解釈で共通） ---------- */
+const agentByName = (name) => allAgents().find(({ a }) => a.name === String(name || '').trim()) || null;
+
+function doTask({ dept, assignee, type, diff, urgent, title }) {
+  const who = assignee ? agentByName(assignee) : null;
+  if (who) dept = who.dept;
+  if (!DEPTS[dept]) dept = (type && ROLE_DEPT[type]) || state.view;
+  if (!DEPTS[dept].roles[type]) type = scoreTypes(String(title || ''), dept) || (who ? who.a.role : Object.keys(DEPTS[dept].roles)[0]);
+  if (!DIFF[diff]) diff = 'normal';
+  title = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 30) || pick(DEPTS[dept].ideas[type]);
+  const t = makeTask(title, type, diff, who ? who.a.id : null);
+  t.urgent = !!urgent;
+  state.depts[dept].tasks.push(t);
+  dirty = true;
+  const r = DEPTS[dept].roles[type];
+  return { ok: true, dept, text: `${DEPTS[dept].name}${who ? `の${who.a.name}` : ''}に「${title}」を依頼しました（${r.task}・${DIFF[diff].label}${t.urgent ? '・急ぎ' : ''}）` };
+}
+
+function doHire({ dept, name, role }) {
+  if (!DEPTS[dept]) dept = (role && ROLE_DEPT[role]) || state.view;
+  if (!DEPTS[dept].roles[role]) role = pick(Object.keys(DEPTS[dept].roles));
+  let note = '';
+  name = String(name || '').trim();
+  if (!name) name = unusedName();
+  const err = nameError(name);
+  if (err) { const alt = unusedName(); note = `（${err}ので「${alt}」にしました）`; name = alt; }
+  const a = hireAgent(dept, name, role, randomLook());
+  if (!a) return { ok: false, text: `${DEPTS[dept].name}の台が満席で採用できません` };
+  return { ok: true, dept, text: `${DEPTS[dept].name}に「${a.name}」（${DEPTS[dept].roles[role].label}）を配属しました${note}` };
+}
+
+function doRename({ from, to }) {
+  const who = agentByName(from);
+  if (!who) return { ok: false, text: `「${from}」という名前のエージェントが見つかりません` };
+  const newName = String(to || '').trim();
+  const err = nameError(newName, who.a);
+  if (err) return { ok: false, text: err };
+  const old = who.a.name;
+  who.a.name = newName;
+  state.depts[who.dept].tasks.forEach((t) => { if (t.agentName === old) t.agentName = newName; });
+  who.a.bubble = { text: `今日から「${newName}」です`, until: state.time + 3 };
+  dirty = true;
+  return { ok: true, dept: who.dept, text: `${old} の名前を「${newName}」に変更しました` };
+}
+
+function doBreak({ targets, dept, kind }) {
+  let list;
+  if (targets === 'all' || (Array.isArray(targets) && targets.includes('all'))) {
+    if (!DEPTS[dept]) dept = state.view;
+    list = state.depts[dept].agents;
+  } else {
+    list = (Array.isArray(targets) ? targets : [targets]).map(agentByName).filter(Boolean).map((x) => x.a);
+    const first = (Array.isArray(targets) ? targets : [targets]).map(agentByName).find(Boolean);
+    if (first) dept = first.dept;
+  }
+  if (!list.length) return { ok: false, text: '休憩させる人が見つかりません' };
+  kind = kind === 'sofa' ? 'sofa' : 'coffee';
+  list.forEach((a) => { a.pending = kind; });
+  const who = targets === 'all' ? `${DEPTS[dept].name}の全員` : list.map((a) => a.name).join('・');
+  return { ok: true, dept, text: `${who}に${kind === 'sofa' ? 'ソファで休憩' : '一服'}してもらいます` };
+}
+
+/* ---------- Claude による指示の解釈 ---------- */
+function commandPrompt(raw) {
+  const deptLines = DEPT_KEYS.map((k) => `- ${k}（${DEPTS[k].name}）: ` + Object.entries(DEPTS[k].roles).map(([r, v]) => `${r}=${v.label}（${v.task}）`).join(', ')).join('\n');
+  const agentLines = allAgents().map(({ a, dept }) => `- ${a.name} / ${dept} / ${a.role} / ${statusText(a)}`).join('\n');
+  return `あなたは業務シミュレーションゲームの「指示の解釈係」です。ユーザーが日本語で書いた指示を、ゲームで実行できる操作の JSON に変換してください。
+
+## 部署と役割（キー=表示名）
+${deptLines}
+
+## いるエージェント（名前 / 部署キー / 役割キー / いまの状態）
+${agentLines}
+
+いま画面に表示している部署: ${state.view}
+
+## 使える操作
+1. タスク依頼: {"op":"task","dept":"部署キー","assignee":"担当者名 または null","type":"役割キー","diff":"easy|normal|hard","urgent":true|false,"title":"タスク名"}
+2. 採用: {"op":"hire","dept":"部署キー","name":"名前 または null","role":"役割キー または null"}
+3. 名前の変更: {"op":"rename","from":"いまの名前","to":"新しい名前"}
+4. 休憩: {"op":"break","targets":["名前", ...] または "all","dept":"部署キー","kind":"coffee|sofa"}
+5. 実行できない: {"op":"none","reason":"短い理由"}
+
+## 決まり
+- 担当者を名指ししたら、その人の部署にする。名前は一覧の表記どおりに書く。
+- 部署・役割は内容から推測する（請求・経費→経理、契約→法務、アポ・電話→インサイドセールス、商談・訪問→フィールドセールス など）。
+- title は依頼の中身を表す短い名詞句（30字以内）。「〜して」「お願い」などの依頼表現や、担当者名・部署名・急ぎ・難易度の言葉は入れない。
+- diff: 「軽く・簡単・サクッと」は easy、「じっくり・丁寧・大型・難しい」は hard、それ以外は normal。
+- urgent: 「急ぎ・至急・最優先・なるはや」があれば true。
+- 「みんな」「全員」は targets を "all" にする。
+- 指示が複数あれば、すべて actions に入れる。
+
+返答は次の形の JSON だけにしてください:
+{"actions":[ ... ]}
+
+## ユーザーの指示
+"""
+${raw.slice(0, 1200)}
+"""`;
+}
+
+function applyAction(act) {
+  if (!act || typeof act !== 'object') return { ok: false, text: '読み取れない操作がありました' };
+  switch (act.op) {
+    case 'task': return doTask(act);
+    case 'hire': return doHire(act);
+    case 'rename': return doRename(act);
+    case 'break': return doBreak(act);
+    case 'none': return { ok: false, text: `実行できません：${String(act.reason || '').slice(0, 60)}` };
+    default: return { ok: false, text: '読み取れない操作がありました' };
+  }
+}
+
 const cmdLog = [];
-function runCommand(raw) {
+let cmdBusy = false;
+
+function runRuleCommand(raw) {
   // 「。」や改行、「あと」「それと」で区切って複数の指示をまとめて受け付ける
   const parts = raw.split(/[。！!？?\n]+|、\s*(?:あと|それと|それから|次に)、?/).map((p) => p.trim()).filter(Boolean);
-  if (!parts.length) return;
-  const results = parts.map((p) => ({ input: p, ...(interpret(p) || { ok: false, text: '指示が空です' }) }));
-  results.forEach((r) => cmdLog.unshift(r));
-  cmdLog.length = Math.min(cmdLog.length, 8);
+  return parts.map((p) => ({ input: p, by: 'rule', ...(interpret(p) || { ok: false, text: '指示が空です' }) }));
+}
+
+async function runCommand(raw) {
+  let results;
+  if (ai) {
+    cmdBusy = true;
+    const pending = { input: raw, by: 'claude', ok: true, text: 'Claudeが解釈しています…', pending: true };
+    cmdLog.unshift(pending); renderCmdLog(); setCmdBusy(true);
+    try {
+      const data = await ai.json(commandPrompt(raw), { modelTier: 'quick', cache: false });
+      const acts = Array.isArray(data) ? data : Array.isArray(data && data.actions) ? data.actions : [];
+      cmdLog.splice(cmdLog.indexOf(pending), 1);
+      results = acts.length ? acts.map((act) => ({ input: raw, by: 'claude', ...applyAction(act) })) : [{ input: raw, by: 'claude', ok: false, text: '実行できる操作が見つかりませんでした' }];
+    } catch (e) {
+      cmdLog.splice(cmdLog.indexOf(pending), 1);
+      const msg = aiFailed(e);
+      results = runRuleCommand(raw);
+      if (msg) results.forEach((r) => { r.note = msg; });
+    } finally {
+      cmdBusy = false; setCmdBusy(false);
+    }
+  } else {
+    results = runRuleCommand(raw);
+  }
+  // 同じ指示から出た操作は、指示文を最初の1件にだけ表示して順番どおりに並べる
+  results.forEach((r, i) => { if (i > 0 && r.input === results[0].input) r.input = ''; });
+  results.slice().reverse().forEach((r) => cmdLog.unshift(r));
+  cmdLog.length = Math.min(cmdLog.length, 10);
   const lastDept = results.filter((r) => r.ok && r.dept).map((r) => r.dept).pop();
   if (lastDept) switchDept(lastDept);
   renderCmdLog();
+  renderCmdExamples();
   save();
+}
+
+function setCmdBusy(on) {
+  const btn = $('#cmdForm button[type="submit"]');
+  btn.disabled = on;
+  btn.textContent = on ? '解釈中…' : '指示する';
 }
 
 function renderCmdLog() {
   $('#cmdLog').innerHTML = cmdLog.map((r) => `
-    <li class="${r.ok ? 'ok' : 'ng'}"><span class="q">${esc(r.input)}</span><span class="a">${r.ok ? '→' : '×'} ${esc(r.text)}</span></li>`).join('');
+    <li class="${r.pending ? 'wait' : r.ok ? 'ok' : 'ng'}${r.input ? '' : ' cont'}">${r.input ? `<span class="q"><em class="by">${r.by === 'claude' ? 'Claude' : 'ルール'}</em>${esc(r.input)}</span>` : ''}<span class="a">${r.pending ? '' : r.ok ? '→ ' : '× '}${esc(r.text)}</span>${r.note ? `<span class="note">${esc(r.note)}</span>` : ''}</li>`).join('');
+}
+
+/* ---------- Claude による成果物の作成 ---------- */
+let writeCtl = null;
+let resultTask = null;
+
+function deliverablePrompt(t, deptKey) {
+  const dp = DEPTS[deptKey], r = dp.roles[t.type];
+  const who = state.depts[deptKey].agents.find((a) => a.id === t.agentId);
+  const size = { easy: '400字程度', normal: '700字程度', hard: '1200字程度' }[t.diff];
+  return `あなたは会社の${dp.name}で働く「${r.label}」の担当者${who ? `（${who.name}、経験レベル${who.level}）` : ''}です。
+次の業務を終えたので、上司に提出する成果物を日本語で書いてください。
+
+業務: ${t.title}
+種類: ${r.task}
+分量: ${size}
+
+書き方:
+- 実務でそのまま使える、具体的な中身にする（提案書なら構成と要点、架電なら結果とトーク改善点、契約チェックなら指摘事項 など）。
+- 社名・人名・金額など、与えられていない固有の情報は「〇〇社」「〇〇円」のように伏せ字にし、実在の数値をでっち上げない。
+- 見出しは「■」で始める。Markdown の記号（#, **, 表）は使わない。
+- 前置きやあいさつは書かず、成果物の本文だけを書く。`;
+}
+
+function openResult(t) {
+  resultTask = t;
+  $('#resultTitle').textContent = t.title;
+  const m = 9 * 60 + Math.floor(t.doneAt);
+  $('#resultMeta').textContent = `${DEPTS[D.key].name} ・ ${roles()[t.type].task} ・ ${DIFF[t.diff].label} ・ Day ${Math.floor(m / 1440) + 1} ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} 完了`;
+  openModal('#resultModal');
+  if (t.aiResult) return showResult(t.aiResult, 'Claudeが作成した成果物', { canRewrite: !!ai });
+  if (ai) return writeDeliverable(t, false);
+  showResult(t.result, 'ゲーム内の定型文です（Claudeに接続すると実際の成果物を書きます）');
+}
+
+function showResult(text, note, { writing = false, canRewrite = false } = {}) {
+  $('#resultBody').textContent = text;
+  $('#resultNote').textContent = note || '';
+  $('#resultStop').hidden = !writing;
+  $('#resultRewrite').hidden = !canRewrite || writing;
+}
+
+async function writeDeliverable(t, rewrite) {
+  if (!ai) return;
+  writeCtl?.abort();
+  const ctl = writeCtl = new AbortController();
+  const deptKey = DEPT_KEYS.find((k) => state.depts[k].tasks.includes(t)) || D.key;
+  showResult('Claudeが成果物を書いています…', '', { writing: true });
+  try {
+    const { text, truncated } = await ai(deliverablePrompt(t, deptKey), {
+      signal: ctl.signal,
+      cache: rewrite ? false : { gcTime: 86400000 },
+      onText: ({ text }) => { if (resultTask === t) $('#resultBody').textContent = text; },
+    });
+    t.aiResult = text;
+    save();
+    if (resultTask === t) showResult(text, truncated ? '途中で打ち切られました' : 'Claudeが作成した成果物', { canRewrite: true });
+  } catch (e) {
+    if (resultTask !== t) return;
+    if (e && e.code === 'cancelled') {
+      if (e.text) { t.aiResult = e.text; save(); }
+      return showResult(e.text || t.result, e.text ? '途中で止めました' : '止めました（定型文を表示しています）', { canRewrite: !!ai });
+    }
+    const msg = aiFailed(e) || 'Claudeが書けませんでした';
+    showResult(e && e.text ? e.text : t.result, `${msg}${e && e.text ? '' : '（定型文を表示しています）'}`, { canRewrite: !!ai });
+  } finally {
+    if (writeCtl === ctl) writeCtl = null;
+  }
 }
 
 function renderCmdExamples() {
@@ -1366,13 +1626,10 @@ function bindUI() {
     const li = e.target.closest('[data-result]');
     if (!li) return;
     const t = taskById(+li.dataset.result);
-    if (!t) return;
-    $('#resultTitle').textContent = t.title;
-    const m = 9 * 60 + Math.floor(t.doneAt);
-    $('#resultMeta').textContent = `${DEPTS[D.key].name} ・ ${roles()[t.type].task} ・ ${DIFF[t.diff].label} ・ Day ${Math.floor(m / 1440) + 1} ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} 完了`;
-    $('#resultBody').textContent = t.result;
-    openModal('#resultModal');
+    if (t) openResult(t);
   });
+  $('#resultStop').addEventListener('click', () => writeCtl?.abort());
+  $('#resultRewrite').addEventListener('click', () => { if (resultTask) writeDeliverable(resultTask, true); });
 
   $('#roster').addEventListener('click', (e) => {
     const c = e.target.closest('[data-agent]');
@@ -1424,10 +1681,9 @@ function bindUI() {
   $('#cmdForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const v = $('#cmdInput').value;
-    if (!v.trim()) return;
-    runCommand(v);
+    if (!v.trim() || cmdBusy) return;
     $('#cmdInput').value = '';
-    renderCmdExamples();
+    runCommand(v);
   });
   $('#cmdInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#cmdForm').requestSubmit(); }
@@ -1501,6 +1757,7 @@ function frame(now) {
 }
 
 if (!load()) newGame();
+initClaude();
 buildRoom();
 bindUI();
 renderRoomLive();

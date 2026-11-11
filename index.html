@@ -44,7 +44,7 @@
 
   <aside class="side">
     <div class="card cmd">
-      <h2>文で指示する</h2>
+      <h2>文で指示する <span class="ai-status" id="aiStatus">接続を確認中…</span></h2>
       <form id="cmdForm" class="cmd-form">
         <textarea id="cmdInput" rows="2" maxlength="200" placeholder="例：佐藤にC社へアポ電して。あと、事務部で請求書の発行を急ぎでお願い"></textarea>
         <button class="btn primary" type="submit">指示する</button>
@@ -148,6 +148,11 @@
     <h3 id="resultTitle"></h3>
     <p class="sub" id="resultMeta"></p>
     <pre class="result" id="resultBody"></pre>
+    <div class="row end result-actions">
+      <span class="sub" id="resultNote"></span>
+      <button class="btn" id="resultStop" hidden>止める</button>
+      <button class="btn" id="resultRewrite" hidden>書き直させる</button>
+    </div>
   </div>
 </div>
 

@@ -219,6 +219,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .cmd-log li { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding: 6px 8px; border-left: 2px solid var(--ok); background: var(--panel-2); }
 .cmd-log li.ng { border-left-color: var(--red); }
 .cmd-log .q { color: var(--sub); }
+.cmd-log li.wait { border-left-color: var(--brass); }
+.cmd-log li.cont { margin-top: -5px; }
+.cmd-log li.wait .a { color: var(--brass); }
+.cmd-log .by { font-style: normal; font-size: 10px; border: 1px solid var(--line); border-radius: 2px; padding: 0 4px; margin-right: 6px; color: var(--sub); }
+.cmd-log .note { color: #e0a14a; font-size: 11px; }
+.ai-status { float: right; font-weight: 400; font-size: 11px; letter-spacing: 0; color: var(--sub) !important; }
+.ai-status::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #5a5560; margin-right: 6px; vertical-align: 1px; }
+.ai-status.on { color: var(--ink) !important; }
+.ai-status.on::before { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.result-actions { margin-top: 10px; flex-wrap: wrap; }
+.result-actions .sub { flex: 1; min-width: 0; }
 
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 240px; overflow-y: auto; }
 .list li { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 2px; border-bottom: 1px solid var(--line); }
@@ -292,6 +303,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .candidate { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; }
 .result {
+  max-height: 55vh; overflow-y: auto;
   white-space: pre-wrap; font-family: var(--font); font-size: 13px; line-height: 1.8;
   background: #121116; border: 1px solid var(--line); border-radius: 4px; padding: 12px; margin: 8px 0 0;
 }
