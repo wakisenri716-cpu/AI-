@@ -547,7 +547,13 @@ function save() {
   try {
     const depts = {};
     DEPT_KEYS.forEach((k) => { const d = state.depts[k]; depts[k] = { ...d, agents: d.agents.map((a) => ({ ...a, path: [], bubble: null })) }; });
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, depts }));
+    const json = JSON.stringify({ ...state, depts });
+    try {
+      localStorage.setItem(SAVE_KEY, json);
+    } catch (e) {
+      // 容量オーバーのときは添付画像を外して保存し直す（名前とテキストは残す）
+      localStorage.setItem(SAVE_KEY, json.replace(/"dataUrl":"data:[^"]*"/g, '"dataUrl":null'));
+    }
   } catch (e) { /* storage unavailable */ }
 }
 function load() {
@@ -627,7 +633,7 @@ function goDesk(a) {
     // 台に向かって座る（後ろ姿）
     a.sitting = 'desk'; a.state = 'work'; a.flip = false; a.back = true;
     const t = taskById(a.taskId);
-    if (t) say(a, t.progress > 0 ? '続きを打つ' : pick(['打つか', 'この台にする', '玉を借りる']));
+    if (t) say(a, t.progress > 0 ? '続きを打つ' : t.files ? '資料を確認します' : pick(['打つか', 'この台にする', '玉を借りる']));
   }, [dx + 0.5, dy + 1.22]);
 }
 
@@ -744,7 +750,7 @@ function deliver(a, t) {
 
 function complete(a, t) {
   t.status = 'done'; t.doneAt = state.time; t.agentId = a.id; t.agentName = a.name;
-  t.result = makeResult(t, a);
+  t.result = makeResult(t, a) + (t.files ? `\n\n■ 参照した資料\n${t.files.map((f) => `・${f.name}`).join('\n')}` : '');
   a.taskId = null; a.done++;
   a.xp += t.work * 2;
   floatText(1, 4, '+1');
@@ -1001,7 +1007,7 @@ function renderUI() {
 
   $('#doingList').innerHTML = doing.length ? doing.map((t) => {
     const a = agentById(t.agentId);
-    return `<li><span class="tag">${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${esc(a ? a.name : '')}</span><span class="mini"><i style="width:${(t.progress / t.work * 100).toFixed(0)}%"></i></span></li>`;
+    return `<li><span class="tag">${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span>${t.files ? `<span class="tag">添付${t.files.length}</span>` : ''}<span class="meta">${esc(a ? a.name : '')}</span><span class="mini"><i style="width:${(t.progress / t.work * 100).toFixed(0)}%"></i></span></li>`;
   }).join('') : '<li class="empty">いまは誰も作業していません</li>';
 
   $('#roster').innerHTML = D.agents.map((a) => `
@@ -1022,11 +1028,11 @@ function renderUI() {
   $('#queueCount').textContent = queued.length ? `(${queued.length})` : '';
   $('#queueList').innerHTML = queued.length ? queued.map((t) => {
     const who = t.assignee ? agentById(t.assignee) : null;
-    return `<li><span class="tag">${roles()[t.type].icon}</span><span class="t">${t.urgent ? '<em class="urgent">急</em>' : ''}${esc(t.title)}</span><span class="meta">${DIFF[t.diff].label}${who ? ' → ' + esc(who.name) : ''}</span><button class="x" data-del="${t.id}" title="取り消す">✕</button></li>`;
+    return `<li><span class="tag">${roles()[t.type].icon}</span><span class="t">${t.urgent ? '<em class="urgent">急</em>' : ''}${esc(t.title)}</span>${t.files ? `<span class="tag">添付${t.files.length}</span>` : ''}<span class="meta">${DIFF[t.diff].label}${who ? ' → ' + esc(who.name) : ''}</span><button class="x" data-del="${t.id}" title="取り消す">✕</button></li>`;
   }).join('') : '<li class="empty">依頼待ちのタスクはありません</li>';
 
   $('#doneList').innerHTML = done.length ? done.slice().reverse().map((t) =>
-    `<li class="clickable" data-result="${t.id}"><span class="tag">${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span><span class="meta">${esc(t.agentName || '')} ${DIFF[t.diff].label}</span></li>`
+    `<li class="clickable" data-result="${t.id}"><span class="tag">${roles()[t.type].icon}</span><span class="t">${esc(t.title)}</span>${t.files ? `<span class="tag">添付${t.files.length}</span>` : ''}<span class="meta">${esc(t.agentName || '')} ${DIFF[t.diff].label}</span></li>`
   ).join('') : '<li class="empty">まだ完了したタスクはありません</li>';
 
   const typeSel = $('#taskType');
@@ -1295,6 +1301,120 @@ function interpret(raw) {
 }
 
 /* =========================================================
+ *  トークへのファイル添付
+ *  テキスト系はそのまま読み、PDF は文字を抜き出し、画像は縮小して保持する。
+ *  添付は指示から作られたタスクに付き、Claude が解釈と成果物の作成で参照する。
+ * ========================================================= */
+const MAX_FILES = 5;
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_TEXT_CHARS = 20000;
+const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|html?|xml|ya?ml|log|ini|js|ts|py|rb|go|java|css|sql)$/i;
+const pendingFiles = [];
+
+const fileKindLabel = { text: 'テキスト', pdf: 'PDF', image: '画像' };
+
+async function downscaleImage(file, maxSide = 1024) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+
+// pdf.js は PDF が添付されたときにだけ読み込む（ワーカーもページ内で動かす）
+let pdfjsReady = null;
+function loadPdfjs() {
+  if (pdfjsReady) return pdfjsReady;
+  const add = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  const base = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  pdfjsReady = add(base + 'pdf.min.js').then(() => add(base + 'pdf.worker.min.js')).then(() => window.pdfjsLib)
+    .catch((e) => { pdfjsReady = null; throw e; });
+  return pdfjsReady;
+}
+
+async function pdfToText(file) {
+  const lib = await loadPdfjs();
+  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const out = [];
+  for (let i = 1; i <= Math.min(doc.numPages, 40); i++) {
+    const page = await doc.getPage(i);
+    const tc = await page.getTextContent();
+    out.push(tc.items.map((it) => it.str + (it.hasEOL ? '\n' : '')).join(''));
+    if (out.join('\n').length > MAX_TEXT_CHARS) break;
+  }
+  return { text: out.join('\n\n'), pages: doc.numPages };
+}
+
+async function readAttachment(file) {
+  if (file.size > MAX_FILE_BYTES) throw new Error('15MB を超えるファイルは添付できません');
+  const base = { id: `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: file.name || '貼り付け画像', size: file.size };
+  if (file.type.startsWith('image/')) {
+    return { ...base, kind: 'image', dataUrl: await downscaleImage(file) };
+  }
+  let text, note = '';
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    try {
+      const r = await pdfToText(file);
+      text = r.text; note = `${r.pages}ページ`;
+    } catch (e) { throw new Error('PDF を読み取れませんでした'); }
+    if (!text.trim()) throw new Error('文字の入っていない PDF です（スキャン画像の PDF は画像で添付してください）');
+    return { ...base, kind: 'pdf', text: text.slice(0, MAX_TEXT_CHARS), truncated: text.length > MAX_TEXT_CHARS, note };
+  }
+  if (file.type.startsWith('text/') || file.type === 'application/json' || TEXT_EXT.test(file.name)) {
+    text = await file.text();
+    return { ...base, kind: 'text', text: text.slice(0, MAX_TEXT_CHARS), truncated: text.length > MAX_TEXT_CHARS };
+  }
+  throw new Error('この形式は読み取れません（テキスト・CSV・PDF・画像に対応）');
+}
+
+async function addFiles(list) {
+  const files = Array.from(list || []);
+  if (!files.length) return;
+  for (const f of files) {
+    if (pendingFiles.length >= MAX_FILES) { toast(`添付は${MAX_FILES}件までです`); break; }
+    const slot = { id: 'loading', name: f.name || '貼り付け画像', loading: true };
+    pendingFiles.push(slot); renderAttach();
+    try {
+      Object.assign(slot, await readAttachment(f), { loading: false });
+    } catch (e) {
+      pendingFiles.splice(pendingFiles.indexOf(slot), 1);
+      toast(`${slot.name}：${e.message}`);
+    }
+    renderAttach();
+  }
+}
+
+function renderAttach() {
+  $('#cmdAttach').innerHTML = pendingFiles.map((f, i) => `
+    <span class="file-chip${f.loading ? ' loading' : ''}">
+      ${f.kind === 'image' ? `<img src="${f.dataUrl}" alt="">` : `<em>${f.loading ? '読込中' : fileKindLabel[f.kind]}</em>`}
+      <span class="fn">${esc(f.name)}</span>
+      ${f.loading ? '' : `<button type="button" class="x" data-unattach="${i}" aria-label="${esc(f.name)}を外す">×</button>`}
+    </span>`).join('');
+}
+
+// タスクに付ける形（保存できる最小限）
+const taskFile = (f) => ({ name: f.name, kind: f.kind, text: f.text, truncated: f.truncated, dataUrl: f.dataUrl, note: f.note });
+
+function filesExcerpt(files, perFile = 800) {
+  return files.map((f, i) => {
+    const head = `[${i}] ${f.name}（${fileKindLabel[f.kind]}${f.note ? '・' + f.note : ''}）`;
+    if (f.kind === 'image') return `${head}：画像ファイル`;
+    return `${head}\n${(f.text || '').slice(0, perFile)}${(f.text || '').length > perFile ? '\n…（以下略）' : ''}`;
+  }).join('\n\n');
+}
+
+function dataUrlToBlob(url) {
+  const [meta, b64] = url.split(',');
+  const bin = atob(b64), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: (meta.match(/data:([^;]+)/) || [])[1] || 'image/jpeg' });
+}
+
+/* =========================================================
  *  Claude 連携（claude.ai の公開ページ内でだけ動く）
  *  - 文での指示を Claude が解釈してゲーム操作に変換
  *  - 完了ログを開くと、Claude がその成果物を実際に書く
@@ -1339,7 +1459,7 @@ function aiFailed(e) {
 /* ---------- 操作の実行（ルール解釈と Claude 解釈で共通） ---------- */
 const agentByName = (name) => allAgents().find(({ a }) => a.name === String(name || '').trim()) || null;
 
-function doTask({ dept, assignee, type, diff, urgent, title }) {
+function doTask({ dept, assignee, type, diff, urgent, title }, files = null) {
   const who = assignee ? agentByName(assignee) : null;
   if (who) dept = who.dept;
   if (!DEPTS[dept]) dept = (type && ROLE_DEPT[type]) || state.view;
@@ -1348,10 +1468,11 @@ function doTask({ dept, assignee, type, diff, urgent, title }) {
   title = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 30) || pick(DEPTS[dept].ideas[type]);
   const t = makeTask(title, type, diff, who ? who.a.id : null);
   t.urgent = !!urgent;
+  if (files && files.length) t.files = files;
   state.depts[dept].tasks.push(t);
   dirty = true;
   const r = DEPTS[dept].roles[type];
-  return { ok: true, dept, text: `${DEPTS[dept].name}${who ? `の${who.a.name}` : ''}に「${title}」を依頼しました（${r.task}・${DIFF[diff].label}${t.urgent ? '・急ぎ' : ''}）` };
+  return { ok: true, dept, text: `${DEPTS[dept].name}${who ? `の${who.a.name}` : ''}に「${title}」を依頼しました（${r.task}・${DIFF[diff].label}${t.urgent ? '・急ぎ' : ''}${t.files ? `・添付${t.files.length}件` : ''}）` };
 }
 
 function doHire({ dept, name, role }) {
@@ -1399,7 +1520,7 @@ function doBreak({ targets, dept, kind }) {
 }
 
 /* ---------- Claude による指示の解釈 ---------- */
-function commandPrompt(raw) {
+function commandPrompt(raw, files = []) {
   const deptLines = DEPT_KEYS.map((k) => `- ${k}（${DEPTS[k].name}）: ` + Object.entries(DEPTS[k].roles).map(([r, v]) => `${r}=${v.label}（${v.task}）`).join(', ')).join('\n');
   const agentLines = allAgents().map(({ a, dept }) => `- ${a.name} / ${dept} / ${a.role} / ${statusText(a)}`).join('\n');
   return `あなたは業務シミュレーションゲームの「指示の解釈係」です。ユーザーが日本語で書いた指示を、ゲームで実行できる操作の JSON に変換してください。
@@ -1413,7 +1534,7 @@ ${agentLines}
 いま画面に表示している部署: ${state.view}
 
 ## 使える操作
-1. タスク依頼: {"op":"task","dept":"部署キー","assignee":"担当者名 または null","type":"役割キー","diff":"easy|normal|hard","urgent":true|false,"title":"タスク名"}
+1. タスク依頼: {"op":"task","dept":"部署キー","assignee":"担当者名 または null","type":"役割キー","diff":"easy|normal|hard","urgent":true|false,"title":"タスク名","files":[添付番号, ...]}
 2. 採用: {"op":"hire","dept":"部署キー","name":"名前 または null","role":"役割キー または null"}
 3. 名前の変更: {"op":"rename","from":"いまの名前","to":"新しい名前"}
 4. 休憩: {"op":"break","targets":["名前", ...] または "all","dept":"部署キー","kind":"coffee|sofa"}
@@ -1427,6 +1548,7 @@ ${agentLines}
 - urgent: 「急ぎ・至急・最優先・なるはや」があれば true。
 - 「みんな」「全員」は targets を "all" にする。
 - 指示が複数あれば、すべて actions に入れる。
+- 添付ファイルがあるときは、それを使うタスクの files に番号を入れる（どのタスク用か分からなければ全部の番号を入れる）。指示文が短くても、添付の内容から依頼の中身・部署・役割を判断してよい。
 
 返答は次の形の JSON だけにしてください:
 {"actions":[ ... ]}
@@ -1434,13 +1556,19 @@ ${agentLines}
 ## ユーザーの指示
 """
 ${raw.slice(0, 1200)}
-"""`;
+"""${files.length ? `
+
+## 添付ファイル（番号・名前・冒頭の内容）
+${filesExcerpt(files)}` : ''}`;
 }
 
-function applyAction(act) {
+function applyAction(act, files = []) {
   if (!act || typeof act !== 'object') return { ok: false, text: '読み取れない操作がありました' };
   switch (act.op) {
-    case 'task': return doTask(act);
+    case 'task': {
+      const picked = Array.isArray(act.files) ? act.files.map(Number).filter((i) => files[i]).map((i) => files[i]) : files;
+      return doTask(act, (picked.length ? picked : files).map(taskFile));
+    }
     case 'hire': return doHire(act);
     case 'rename': return doRename(act);
     case 'break': return doBreak(act);
@@ -1458,17 +1586,18 @@ function runRuleCommand(raw) {
   return parts.map((p) => ({ input: p, by: 'rule', ...(interpret(p) || { ok: false, text: '指示が空です' }) }));
 }
 
-async function runCommand(raw) {
+async function runCommand(raw, files = []) {
   let results;
+  const firstNewId = state.nextId;
   if (ai) {
     cmdBusy = true;
     const pending = { input: raw, by: 'claude', ok: true, text: 'Claudeが解釈しています…', pending: true };
     cmdLog.unshift(pending); renderCmdLog(); setCmdBusy(true);
     try {
-      const data = await ai.json(commandPrompt(raw), { modelTier: 'quick', cache: false });
+      const data = await ai.json(commandPrompt(raw, files), { modelTier: 'quick', cache: false });
       const acts = Array.isArray(data) ? data : Array.isArray(data && data.actions) ? data.actions : [];
       cmdLog.splice(cmdLog.indexOf(pending), 1);
-      results = acts.length ? acts.map((act) => ({ input: raw, by: 'claude', ...applyAction(act) })) : [{ input: raw, by: 'claude', ok: false, text: '実行できる操作が見つかりませんでした' }];
+      results = acts.length ? acts.map((act) => ({ input: raw, by: 'claude', ...applyAction(act, files) })) : [{ input: raw, by: 'claude', ok: false, text: '実行できる操作が見つかりませんでした' }];
     } catch (e) {
       cmdLog.splice(cmdLog.indexOf(pending), 1);
       const msg = aiFailed(e);
@@ -1479,6 +1608,16 @@ async function runCommand(raw) {
     }
   } else {
     results = runRuleCommand(raw);
+  }
+  // ルールで作ったタスクには、添付をすべて付ける
+  if (files.length) {
+    const created = DEPT_KEYS.flatMap((k) => state.depts[k].tasks).filter((t) => t.id >= firstNewId);
+    created.forEach((t) => {
+      if (t.files) return;
+      t.files = files.map(taskFile);
+      results.push({ input: '', by: 'rule', ok: true, text: `「${t.title}」に添付${files.length}件を付けました` });
+    });
+    if (!created.length) results.push({ input: '', by: results[0] ? results[0].by : 'rule', ok: false, text: '添付ファイルはタスクの依頼にだけ付けられます（今回は使いませんでした）' });
   }
   // 同じ指示から出た操作は、指示文を最初の1件にだけ表示して順番どおりに並べる
   results.forEach((r, i) => { if (i > 0 && r.input === results[0].input) r.input = ''; });
@@ -1521,7 +1660,15 @@ function deliverablePrompt(t, deptKey) {
 - 実務でそのまま使える、具体的な中身にする（提案書なら構成と要点、架電なら結果とトーク改善点、契約チェックなら指摘事項 など）。
 - 社名・人名・金額など、与えられていない固有の情報は「〇〇社」「〇〇円」のように伏せ字にし、実在の数値をでっち上げない。
 - 見出しは「■」で始める。Markdown の記号（#, **, 表）は使わない。
-- 前置きやあいさつは書かず、成果物の本文だけを書く。`;
+- 前置きやあいさつは書かず、成果物の本文だけを書く。${t.files ? `
+- 下の添付資料の内容をもとに書く。資料に書かれている事実・数字はそのまま使ってよい。資料にないことは推測で補わず「要確認」とする。${t.files.some((f) => f.kind === 'image') ? '\n- 画像の添付は、このメッセージに付いている画像のこと。' : ''}
+
+## 添付資料
+${(() => { let budget = 60000; return t.files.map((f, i) => {
+  if (f.kind === 'image') return `[${i}] ${f.name}（画像）`;
+  const body = (f.text || '').slice(0, Math.max(0, budget)); budget -= body.length;
+  return `[${i}] ${f.name}（${fileKindLabel[f.kind]}${f.truncated ? '・長いため途中まで' : ''}）\n${body}`;
+}).join('\n\n'); })()}` : ''}`;
 }
 
 function openResult(t) {
@@ -1529,6 +1676,7 @@ function openResult(t) {
   $('#resultTitle').textContent = t.title;
   const m = 9 * 60 + Math.floor(t.doneAt);
   $('#resultMeta').textContent = `${DEPTS[D.key].name} ・ ${roles()[t.type].task} ・ ${DIFF[t.diff].label} ・ Day ${Math.floor(m / 1440) + 1} ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} 完了`;
+  $('#resultFiles').innerHTML = (t.files || []).map((f) => `<span class="file-chip">${f.kind === 'image' && f.dataUrl ? `<img src="${f.dataUrl}" alt="">` : `<em>${fileKindLabel[f.kind]}</em>`}<span class="fn">${esc(f.name)}</span></span>`).join('');
   openModal('#resultModal');
   if (t.aiResult) return showResult(t.aiResult, 'Claudeが作成した成果物', { canRewrite: !!ai });
   if (ai) return writeDeliverable(t, false);
@@ -1549,8 +1697,15 @@ async function writeDeliverable(t, rewrite) {
   const deptKey = DEPT_KEYS.find((k) => state.depts[k].tasks.includes(t)) || D.key;
   showResult('Claudeが成果物を書いています…', '', { writing: true });
   try {
+    const imgs = (t.files || []).filter((f) => f.kind === 'image' && f.dataUrl);
+    let images;
+    if (imgs.length) {
+      const lim = await ai.limits().catch(() => null);
+      if (lim && lim.images) images = imgs.slice(0, lim.images.maxCount).map((f) => dataUrlToBlob(f.dataUrl));
+    }
     const { text, truncated } = await ai(deliverablePrompt(t, deptKey), {
       signal: ctl.signal,
+      ...(images ? { images } : {}),
       cache: rewrite ? false : { gcTime: 86400000 },
       onText: ({ text }) => { if (resultTask === t) $('#resultBody').textContent = text; },
     });
@@ -1680,14 +1835,34 @@ function bindUI() {
 
   $('#cmdForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const v = $('#cmdInput').value;
-    if (!v.trim() || cmdBusy) return;
+    if (cmdBusy) return;
+    if (pendingFiles.some((f) => f.loading)) { toast('ファイルを読み込み中です'); return; }
+    const files = pendingFiles.filter((f) => !f.loading);
+    let v = $('#cmdInput').value.trim();
+    if (!v && !files.length) return;
+    if (!v) v = '添付ファイルの内容を確認して対応して';
     $('#cmdInput').value = '';
-    runCommand(v);
+    pendingFiles.length = 0; renderAttach();
+    runCommand(v, files);
   });
   $('#cmdInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#cmdForm').requestSubmit(); }
   });
+  $('#cmdAttachBtn').addEventListener('click', () => $('#cmdFile').click());
+  $('#cmdFile').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
+  $('#cmdAttach').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-unattach]');
+    if (b) { pendingFiles.splice(+b.dataset.unattach, 1); renderAttach(); }
+  });
+  // 貼り付け（クリップボードの画像・ファイル）とドラッグ＆ドロップ
+  $('#cmdInput').addEventListener('paste', (e) => {
+    const fs = e.clipboardData && e.clipboardData.files;
+    if (fs && fs.length) { e.preventDefault(); addFiles(fs); }
+  });
+  const card = $('.card.cmd');
+  card.addEventListener('dragover', (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); card.classList.add('drop'); } });
+  card.addEventListener('dragleave', (e) => { if (!card.contains(e.relatedTarget)) card.classList.remove('drop'); });
+  card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('drop'); addFiles(e.dataTransfer.files); });
   $('#cmdExamples').addEventListener('click', (e) => {
     const b = e.target.closest('.ex');
     if (b) { $('#cmdInput').value = b.textContent; $('#cmdInput').focus(); }
@@ -1709,6 +1884,7 @@ function bindUI() {
     timers.length = 0;
     closeModals();
     newGame(); buildRoom(); cmdLog.length = 0; renderCmdLog(); renderCmdExamples();
+    pendingFiles.length = 0; renderAttach();
     $('#autoTask').checked = state.autoTask;
   });
 
