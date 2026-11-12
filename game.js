@@ -1424,7 +1424,11 @@ let ai = null;          // sample 関数。null なら未接続
 let aiNote = '接続を確認中…';
 const AI_OFF = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired']);
 
+// Claude 連携の有効・無効。false の間は Claude を一切呼ばず、ルール解釈と定型文で動く
+const CLAUDE_ENABLED = false;
+
 function initClaude() {
+  if (!CLAUDE_ENABLED) { aiNote = 'Claude連携は停止中（ルールで解釈）'; renderAiStatus(); return; }
   if (!window.claude || typeof window.claude.use !== 'function') { aiNote = 'Claude未接続（ルールで解釈）'; renderAiStatus(); return; }
   window.claude.use('sample').then((s) => {
     ai = s || null;
